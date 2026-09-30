@@ -4,9 +4,23 @@
 
 ## 구성
 
-- `plugins.txt` 전역 설치할 플러그인 목록 (현재 ponytail)
+- `plugins.txt` 전역 설치할 플러그인 목록 (아래 표)
 - `skills/` 직접 만든 스킬 폴더 (폴더마다 `SKILL.md`)
 - `install.sh` 위 두 가지를 사용자 범위(`~/.claude`)에 설치
+
+## 설치되는 플러그인
+
+| 플러그인 | 하는 일 |
+|---|---|
+| ponytail | 기존 설치 항목 |
+| andrej-karpathy-skills | 카파시식 코딩 원칙으로 과한 수정과 추측 코딩 방지 |
+| caveman | 짧은 말투로 토큰 사용량 절감 |
+| ui-ux-pro-max | UI와 UX 디자인 지식 제공 |
+| mattpocock-skills | handoff 포함 실무용 스킬 모음 |
+| superpowers | 브레인스토밍과 계획과 TDD와 디버깅 흐름 |
+| claude-mem | 지난 세션 작업을 기억해 다음 세션에 전달 |
+| planning-with-files | 계획과 진행 상황을 파일로 남겨 긴 작업 유지 |
+| example-skills | 앤트로픽 공식 스킬 (skill-creator 프론트엔드 디자인 웹앱 테스트 등) |
 
 ## 적용
 

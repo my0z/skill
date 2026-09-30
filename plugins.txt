@@ -1,3 +1,11 @@
 # 전역 설치할 플러그인 목록
 # 형식: <마켓플레이스 GitHub owner/repo> <플러그인@마켓플레이스>
 DietrichGebert/ponytail ponytail@ponytail
+multica-ai/andrej-karpathy-skills andrej-karpathy-skills@karpathy-skills
+JuliusBrussee/caveman caveman@caveman
+nextlevelbuilder/ui-ux-pro-max-skill ui-ux-pro-max@ui-ux-pro-max-skill
+mattpocock/skills mattpocock-skills@mattpocock
+obra/superpowers superpowers@superpowers-dev
+thedotmack/claude-mem claude-mem@thedotmack
+OthmanAdi/planning-with-files planning-with-files@planning-with-files
+anthropics/skills example-skills@anthropic-agent-skills
