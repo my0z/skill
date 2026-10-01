@@ -9,3 +9,48 @@ obra/superpowers superpowers@superpowers-dev
 thedotmack/claude-mem claude-mem@thedotmack
 OthmanAdi/planning-with-files planning-with-files@planning-with-files
 anthropics/skills example-skills@anthropic-agent-skills
+
+# 앤트로픽 공식 스킬 마켓
+anthropics/skills document-skills@anthropic-agent-skills
+anthropics/skills claude-api@anthropic-agent-skills
+anthropics/skills academy-guide@anthropic-agent-skills
+anthropics/skills discernment-nudge@anthropic-agent-skills
+
+# 앤트로픽 공식 플러그인 마켓 (외부 계정 없이 쓰는 앤트로픽 제작 플러그인)
+anthropics/claude-plugins-official agent-sdk-dev@claude-plugins-official
+anthropics/claude-plugins-official claude-code-setup@claude-plugins-official
+anthropics/claude-plugins-official claude-md-management@claude-plugins-official
+anthropics/claude-plugins-official claude-security@claude-plugins-official
+anthropics/claude-plugins-official code-modernization@claude-plugins-official
+anthropics/claude-plugins-official code-review@claude-plugins-official
+anthropics/claude-plugins-official code-simplifier@claude-plugins-official
+anthropics/claude-plugins-official commit-commands@claude-plugins-official
+anthropics/claude-plugins-official feature-dev@claude-plugins-official
+anthropics/claude-plugins-official frontend-design@claude-plugins-official
+anthropics/claude-plugins-official hookify@claude-plugins-official
+anthropics/claude-plugins-official math-olympiad@claude-plugins-official
+anthropics/claude-plugins-official math-proof@claude-plugins-official
+anthropics/claude-plugins-official mcp-apps@claude-plugins-official
+anthropics/claude-plugins-official mcp-server-dev@claude-plugins-official
+anthropics/claude-plugins-official mcp-tunnels@claude-plugins-official
+anthropics/claude-plugins-official playground@claude-plugins-official
+anthropics/claude-plugins-official plugin-dev@claude-plugins-official
+anthropics/claude-plugins-official pr-review-toolkit@claude-plugins-official
+anthropics/claude-plugins-official project-artifact@claude-plugins-official
+anthropics/claude-plugins-official ralph-loop@claude-plugins-official
+anthropics/claude-plugins-official receipts@claude-plugins-official
+anthropics/claude-plugins-official security-guidance@claude-plugins-official
+anthropics/claude-plugins-official session-report@claude-plugins-official
+anthropics/claude-plugins-official skill-creator@claude-plugins-official
+anthropics/claude-plugins-official clangd-lsp@claude-plugins-official
+anthropics/claude-plugins-official csharp-lsp@claude-plugins-official
+anthropics/claude-plugins-official gopls-lsp@claude-plugins-official
+anthropics/claude-plugins-official jdtls-lsp@claude-plugins-official
+anthropics/claude-plugins-official kotlin-lsp@claude-plugins-official
+anthropics/claude-plugins-official lua-lsp@claude-plugins-official
+anthropics/claude-plugins-official php-lsp@claude-plugins-official
+anthropics/claude-plugins-official pyright-lsp@claude-plugins-official
+anthropics/claude-plugins-official ruby-lsp@claude-plugins-official
+anthropics/claude-plugins-official rust-analyzer-lsp@claude-plugins-official
+anthropics/claude-plugins-official swift-lsp@claude-plugins-official
+anthropics/claude-plugins-official typescript-lsp@claude-plugins-official

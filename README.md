@@ -21,6 +21,27 @@
 | claude-mem | 지난 세션 작업을 기억해 다음 세션에 전달 |
 | planning-with-files | 계획과 진행 상황을 파일로 남겨 긴 작업 유지 |
 | example-skills | 앤트로픽 공식 스킬 (skill-creator 프론트엔드 디자인 웹앱 테스트 등) |
+| document-skills | Word와 Excel과 PowerPoint와 PDF 문서 처리 |
+| claude-api | Claude API와 SDK 문서 |
+| academy-guide | Claude Academy 강의 추천 |
+| discernment-nudge | 답변 뒤 후속 질문 제안 |
+
+### 앤트로픽 공식 플러그인 마켓 (claude-plugins-official)
+
+외부 서비스 계정 없이 바로 쓰는 앤트로픽 제작 플러그인 전부를 넣었다.
+
+| 분류 | 플러그인 |
+|---|---|
+| 개발 흐름 | feature-dev / code-review / pr-review-toolkit / code-simplifier / commit-commands / code-modernization / ralph-loop |
+| 보안 | claude-security / security-guidance |
+| Claude Code 설정 | claude-code-setup / claude-md-management / hookify / plugin-dev / skill-creator |
+| MCP와 SDK | agent-sdk-dev / mcp-server-dev / mcp-apps / mcp-tunnels |
+| 프론트엔드와 결과물 | frontend-design / playground / project-artifact |
+| 리포트 | session-report / receipts |
+| 수학 | math-olympiad / math-proof |
+| 언어 서버 | clangd csharp gopls jdtls kotlin lua php pyright ruby rust-analyzer swift typescript (각 `-lsp`) |
+
+언어 서버 플러그인은 해당 언어 서버 바이너리가 PC에 깔려 있어야 동작한다.
 
 ## 적용
 

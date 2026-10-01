@@ -4,14 +4,21 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 command -v claude >/dev/null || { echo "claude CLI 없음"; exit 1; }
 
-grep -vE '^\s*(#|$)' "$DIR/plugins.txt" | while read -r market plugin; do
-  claude plugin marketplace add "$market" </dev/null || true
-  claude plugin marketplace update "${plugin#*@}" </dev/null || true
-  claude plugin install "$plugin" --scope user </dev/null
-done
+seen=" "
+failed=""
+while read -r market plugin; do
+  name="${plugin#*@}"
+  if [[ "$seen" != *" $name "* ]]; then
+    claude plugin marketplace add "$market" </dev/null || true
+    claude plugin marketplace update "$name" </dev/null || true
+    seen+="$name "
+  fi
+  claude plugin install "$plugin" --scope user </dev/null || failed+=" $plugin"
+done < <(grep -vE '^\s*(#|$)' "$DIR/plugins.txt")
 
 mkdir -p "$HOME/.claude/skills"
 for s in "$DIR"/skills/*/; do
   [ -f "$s/SKILL.md" ] && cp -r "$s" "$HOME/.claude/skills/"
 done
+[ -n "$failed" ] && echo "설치 실패:$failed"
 echo "완료"
