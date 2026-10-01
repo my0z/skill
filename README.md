@@ -22,6 +22,12 @@
 | planning-with-files | 계획과 진행 상황을 파일로 남겨 긴 작업 유지 |
 | example-skills | 앤트로픽 공식 스킬 (skill-creator 프론트엔드 디자인 웹앱 테스트 등) |
 
+## 직접 만든 스킬
+
+| 스킬 | 하는 일 |
+|---|---|
+| movie-trailer | 사진 2~3장과 영상 1개를 영화 예고편처럼 자동 편집 (ffmpeg / Artlist MCP 음악 선택) |
+
 ## 적용
 
 로컬 PC에서 한 번 실행하면 그 PC의 모든 대화창에 적용된다.
