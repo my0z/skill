@@ -26,7 +26,7 @@
 
 | 스킬 | 하는 일 |
 |---|---|
-| movie-trailer | 사진 2~3장과 영상 1개를 영화 예고편처럼 자동 편집 (ffmpeg / Artlist MCP 음악 선택) |
+| cinematic-ad | 상품 사진 2~3장과 영상 1개를 영화처럼 연출한 상품광고로 자동 편집 (ffmpeg / Artlist MCP 음악 선택) |
 
 ## 적용
 
