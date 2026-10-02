@@ -21,6 +21,16 @@
 | claude-mem | 지난 세션 작업을 기억해 다음 세션에 전달 |
 | planning-with-files | 계획과 진행 상황을 파일로 남겨 긴 작업 유지 |
 | example-skills | 앤트로픽 공식 스킬 (skill-creator 프론트엔드 디자인 웹앱 테스트 등) |
+| cloudflare | Workers · D1 · R2 · Durable Objects 개발 스킬 (이 프로젝트의 워커) |
+| claude-md-management | CLAUDE.md 점검과 갱신 |
+| claude-code-setup | 코드베이스에 맞는 훅 · 스킬 · 자동화 추천 |
+| code-simplifier | 코드를 읽기 쉽게 다듬는 에이전트 |
+| commit-commands | 커밋 · 푸시 · PR 명령 모음 |
+| security-guidance | 쓰는 코드의 보안 위험을 바로 알려 줌 |
+| feature-dev | 기능 개발 흐름 (탐색 · 설계 · 구현 · 검토) |
+| pr-review-toolkit | PR 검토 에이전트 모음 |
+| hookify | 원치 않는 동작을 막는 훅을 쉽게 만들기 |
+| frontend-design | 화면 디자인 품질을 높이는 스킬 |
 
 ## 적용
 
