@@ -31,3 +31,13 @@
 
 ## 끝나면
 - 결과 PNG 를 이 저장소의 `brand/` 폴더에 올려 두세요 (사용자가 폰으로 내려받아요).
+
+## 2차 시안 (2026-10-03 KST)
+- `brand/icon.html` 시안 4개를 SVG 로 그린 파일 (글꼴 `brand/Poppins-Black.ttf`)
+- `brand/render.mjs` PNG 로 찍는 코드 (Playwright)
+- 1 `sell-usb-c-tag.png` 분홍 바탕 흰 가격표
+- 2 `sell-usb-d-bag.png` 노란 바탕 빨간 쇼핑백
+- 3 `sell-usb-e-play.png` 어두운 바탕 노란 가격표 + 재생 버튼
+- 4 `sell-usb-f-sticker.png` 분홍 바탕 노란 세일 스티커
+- `sell-usb-preview.png` 네 안을 동그랗게 잘라 큰 크기와 100px 과 48px 로 비교
+- 모두 기울이지 않고 가운데에 두었고 글자를 두 줄(sell / .usb)로 나눠 작게 봐도 읽히게 했어요.
