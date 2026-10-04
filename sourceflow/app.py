@@ -1,5 +1,5 @@
 """SourceFlow: paste links and save best quality video. Run: python app.py"""
-import json, os, re, threading, uuid, webbrowser
+import json, os, re, secrets, threading, uuid, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from yt_dlp import YoutubeDL
@@ -7,6 +7,8 @@ from yt_dlp import YoutubeDL
 OUT = Path(os.environ.get("SF_DIR", Path.home() / "Downloads" / "SourceFlow"))
 OUT.mkdir(parents=True, exist_ok=True)
 JOBS = {}  # id -> state dict. ponytail: in memory only so history resets on restart
+TOKEN = secrets.token_hex(16)  # per run secret embedded in the page
+HOSTS = {"127.0.0.1:8765", "localhost:8765"}
 SEM = threading.Semaphore(3)  # parallel downloads cap
 URL_RE = re.compile(r"https?://[^\s]+")  # share text from Douyin or Xiaohongshu has extra words around the link
 
@@ -54,10 +56,11 @@ button{background:#1f6b4f;color:#fff;border:0;padding:10px 20px;border-radius:8p
 <textarea id=t placeholder="영상 URL을 붙여 넣으세요"></textarea><br><button onclick=go()>다운로드 시작</button>
 <div id=l></div>
 <script>
-async function go(){const u=t.value;t.value='';await fetch('/api/add',{method:'POST',body:u})}
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function go(){const u=t.value;t.value='';await fetch('/api/add',{method:'POST',headers:{'X-SF-Token':'__TOKEN__'},body:u})}
 async function tick(){const j=await (await fetch('/api/list')).json();
-l.innerHTML=j.map(x=>`<div class=r><b>${x.title||x.url}</b> <small>${x.res||''} ${x.state}</small>
-${x.state=='done'?`<a href="/file/${x.file}">영상 저장</a>`:''}${x.err?`<br><small>${x.err}</small>`:''}
+l.innerHTML=j.map(x=>`<div class=r><b>${esc(x.title||x.url)}</b> <small>${esc(x.res)} ${esc(x.state)}</small>
+${x.state=='done'?`<a href="/file/${encodeURIComponent(x.file)}">영상 저장</a>`:''}${x.err?`<br><small>${esc(x.err)}</small>`:''}
 <div class=b><i style="width:${x.pct}%"></i></div></div>`).join('')}
 setInterval(tick,1000);tick()
 </script>"""
@@ -72,9 +75,17 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def bad_host(self):
+        # blocks DNS rebinding since a rebound page still sends its own hostname
+        if self.headers.get("Host") not in HOSTS:
+            self.send_error(403)
+            return True
+
     def do_GET(self):
+        if self.bad_host():
+            return
         if self.path == "/":
-            self.send(PAGE, "text/html; charset=utf-8")
+            self.send(PAGE.replace("__TOKEN__", TOKEN), "text/html; charset=utf-8")
         elif self.path == "/api/list":
             self.send(json.dumps(list(JOBS.values())[::-1]))
         elif self.path.startswith("/file/"):
@@ -87,6 +98,10 @@ class H(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if self.bad_host():
+            return
+        if self.headers.get("X-SF-Token") != TOKEN:  # custom header forces CORS preflight so other sites cannot post
+            return self.send_error(403)
         if self.path != "/api/add":
             return self.send_error(404)
         text = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
