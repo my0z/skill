@@ -3,6 +3,8 @@ import json, os, subprocess, uuid
 from pathlib import Path
 
 AAC = ["-c:a", "aac", "-b:a", "192k"]
+PROTO = ["-protocol_whitelist", "file"]  # inputs may read local files only so a playlist file cannot fetch urls
+FORMATS = {"matroska", "webm", "mov", "mp4", "gif", "mp3", "wav", "flac", "png_pipe", "ogg", "mpegts", "avi", "flv"}
 
 
 def enc(crf=16, preset="medium"):
@@ -11,7 +13,7 @@ def enc(crf=16, preset="medium"):
 
 def probe(path):
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height", "-of", "json", str(path)],
+        ["ffprobe", "-v", "error"] + PROTO + ["-show_entries", "stream=codec_type,width,height", "-of", "json", str(path)],
         capture_output=True, text=True, check=True).stdout
     st = json.loads(out)["streams"]
     v = next((s for s in st if s["codec_type"] == "video"), {})
@@ -60,7 +62,7 @@ def crop(p, i):
 
 def fade(p, i):
     d = float(subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(i[0])],
+        ["ffprobe", "-v", "error"] + PROTO + ["-show_entries", "format=duration", "-of", "csv=p=0", str(i[0])],
         capture_output=True, text=True, check=True).stdout)
     s = p["seconds"]
     if s * 2 > d:
@@ -182,7 +184,13 @@ def edit(op, raw, names, outdir):
         raise ValueError("select exactly one file")
     if not all(f.is_file() for f in ins):
         raise ValueError("file not found")
+    for f in ins:  # reject playlists and concat scripts that can point ffmpeg at other files
+        names = subprocess.run(["ffprobe", "-v", "error"] + PROTO + ["-show_entries", "format=format_name", "-of", "csv=p=0", str(f)],
+                               capture_output=True, text=True).stdout.strip().split(",")
+        if not FORMATS.intersection(names):
+            raise ValueError("unsupported file format")
     args, ext = build(clean(fields, raw), ins)
+    args = [y for a in args for y in (PROTO + [a] if a == "-i" else [a])]
     out = outdir / f"{ins[0].stem}_{op}_{uuid.uuid4().hex[:4]}.{ext}"
     r = subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"] + args + [str(out)], capture_output=True, text=True)
     if r.returncode:

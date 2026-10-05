@@ -1,5 +1,5 @@
 """SourceFlow: paste links and save best quality video. Run: python app.py"""
-import json, mimetypes, os, re, secrets, threading, uuid, webbrowser
+import json, os, re, secrets, threading, uuid, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -10,6 +10,9 @@ OUT = Path(os.environ.get("SF_DIR", Path.home() / "Downloads" / "SourceFlow"))
 OUT.mkdir(parents=True, exist_ok=True)
 JOBS = {}  # id -> state dict. ponytail: in memory only so history resets on restart
 TOKEN = secrets.token_hex(16)  # per run secret embedded in the page
+MEDIA = {".mp4": "video/mp4", ".mkv": "video/x-matroska", ".webm": "video/webm", ".mov": "video/quicktime", ".gif": "image/gif",
+         ".png": "image/png", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".flac": "audio/flac"}  # anything else is sent as a download
+FILE_HEADERS = (("Content-Security-Policy", "sandbox"), ("Content-Disposition", "attachment"))
 HOSTS = {"127.0.0.1:8765", "localhost:8765"}
 SEM = threading.Semaphore(3)  # parallel downloads cap
 URL_RE = re.compile(r"https?://[^\s]+")  # share text from Douyin or Xiaohongshu has extra words around the link
@@ -99,10 +102,13 @@ setInterval(tick,1000);tick()
 
 
 class H(BaseHTTPRequestHandler):
-    def send(self, body, ctype="application/json", code=200):
+    def send(self, body, ctype="application/json", code=200, extra=()):
         body = body if isinstance(body, bytes) else body.encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        for k, v in extra:
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -128,7 +134,7 @@ class H(BaseHTTPRequestHandler):
         elif self.path.startswith("/file/"):
             f = OUT / Path(unquote(self.path[6:])).name  # name only blocks path traversal
             if f.is_file():
-                self.send(f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
+                self.send(f.read_bytes(), MEDIA.get(f.suffix.lower(), "application/octet-stream"), extra=FILE_HEADERS)
             else:
                 self.send_error(404)
         else:

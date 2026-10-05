@@ -17,6 +17,13 @@ for op in OPS:
     out = edit(op, raw, names, d)
     assert (d / out).stat().st_size > 0, op
     print("ok", op, out)
+(d / "evil.mp4").write_text("#EXTM3U\n#EXTINF:1,\nfile:///etc/passwd\n")
+for bad in ("evil.mp4",):
+    try:
+        edit("mute", {}, [bad], d)
+        raise SystemExit("playlist accepted")
+    except ValueError:
+        pass
 for bad in ("../etc/passwd", "nope.mp4"):
     try:
         edit("mute", {}, [bad], d)
