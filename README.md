@@ -31,6 +31,7 @@
 | pr-review-toolkit | PR 검토 에이전트 모음 |
 | hookify | 원치 않는 동작을 막는 훅을 쉽게 만들기 |
 | frontend-design | 화면 디자인 품질을 높이는 스킬 |
+| instagram-agent | 인스타그램 릴스 · 캡션 · 캐러셀 · 프로필 점검 · 휴머나이저 스킬 13종 |
 
 ## 적용
 
