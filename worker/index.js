@@ -25,7 +25,31 @@ a{color:var(--accent);text-decoration:none;border-bottom:1px solid currentColor}
 </body>
 </html>`;
 
+const tag = (s, t) =>
+  s.match(new RegExp(`<${t}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${t}>`))?.[1].trim();
+
+// shortcut: RSS 2.0 only and no Atom — upgrade when a feed needs it
+export async function collect(env) {
+  for (const url of (env.FEEDS ?? "").split(/\s+/).filter(Boolean)) {
+    try {
+      const xml = await (await fetch(url)).text();
+      for (const item of xml.match(/<item\b[\s\S]*?<\/item>/g) ?? []) {
+        const link = tag(item, "link");
+        const title = tag(item, "title");
+        if (!link || !title) continue;
+        const r = await env.DB.prepare("INSERT OR IGNORE INTO items(link,title) VALUES(?,?)").bind(link, title).run();
+        if (r.meta.changes) await env.JOBS.send({ link, title });
+      }
+    } catch (e) {
+      console.error("feed failed", url, e);
+    }
+  }
+}
+
 export default {
+  async scheduled(_, env, ctx) {
+    ctx.waitUntil(collect(env));
+  },
   async fetch(req) {
     const { pathname } = new URL(req.url);
     if (pathname === "/health") return Response.json({ ok: true });

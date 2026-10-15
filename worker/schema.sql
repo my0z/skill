@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS items (
+  link TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  created INTEGER NOT NULL DEFAULT (unixepoch())
+);
