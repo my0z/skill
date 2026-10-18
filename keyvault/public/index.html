@@ -13,6 +13,7 @@ textarea{resize:none;overflow:hidden;word-break:break-all;display:block;box-sizi
 [hidden]{display:none!important}
 .m{-webkit-text-security:disc}
 button{cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
 button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 #gate{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:20vh auto}
 #bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
@@ -155,10 +156,13 @@ if (!TS) $('#dk').replaceWith(Object.assign(document.createElement('input'),
 const dn = $('#dn'), dk = $('#dk'), dm = $('#dm');
 const grow = el => { if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
 const mask = on => TS ? dk.classList.toggle('m', on) : (dk.type = on ? 'password' : 'text');
+// 다른 항목에 같은 키가 있으면 그 항목을 돌려준다 (공백 차이는 무시)
+const dupOf = () => dk.value.trim() ? items.find((it, i) => i !== ed && it.k.trim() === dk.value.trim()) : null;
 function info() {
-  const k = dk.value, ws = /\s/.test(k), s = $('#di');
-  s.className = 'info' + (ws ? ' w' : '');
-  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '');
+  const k = dk.value, ws = /\s/.test(k), d = dupOf(), s = $('#di');
+  s.className = 'info' + (ws || d ? ' w' : '');
+  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d ? ` · ⛔ 이미 등록됨: ${d.n}` : '');
+  $('#f .p').disabled = !!d;
 }
 function openDlg(i) {
   ed = i;
@@ -178,6 +182,7 @@ $('#f').oninput = e => { if (e.target.tagName === 'TEXTAREA') grow(e.target); in
 $('#f').onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA') { e.preventDefault(); $('#f').requestSubmit(); } };
 $('#f').onsubmit = async e => {
   e.preventDefault();
+  if (dupOf()) return dk.focus();
   const it = {n: dn.value.trim(), k: dk.value, m: dm.value};
   if (!it.n) return dn.focus();
   if (ed < 0) items.unshift(it); else items[ed] = it;
