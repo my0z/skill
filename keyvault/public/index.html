@@ -113,7 +113,7 @@ function render(focus) {
     const r = document.createElement('div');
     r.className = 'row';
     r.dataset.i = i;
-    r.innerHTML = '<input data-f="n" placeholder="이름"><input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false"><input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cp">복사</button><button data-a="del">삭제</button></div><small class="info"></small>';
+    r.innerHTML = '<input data-f="n" placeholder="이름"><input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false"><input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cpn">이름복사</button><button data-a="cpk">키복사</button><button data-a="cpb">둘다복사</button><button data-a="del">삭제</button></div><small class="info"></small>';
     for (const f of ['n', 'k', 'm']) r.querySelector(`[data-f=${f}]`).value = it[f];
     upd(r, it);
     list.append(r);
@@ -137,7 +137,8 @@ $('#list').onclick = async e => {
   if (!a) return;
   const row = e.target.closest('.row'), i = row.dataset.i, k = row.querySelector('[data-f=k]');
   if (a === 'eye') { k.type = k.type === 'password' ? 'text' : 'password'; e.target.textContent = k.type === 'text' ? '숨김' : '보기'; }
-  if (a === 'cp') { await navigator.clipboard.writeText(items[i].k); toast('복사됨'); }
+  const CP = {cpn: it => it.n, cpk: it => it.k, cpb: it => it.n + '=' + it.k};
+  if (CP[a]) { await navigator.clipboard.writeText(CP[a](items[i])); toast('복사됨'); }
   if (a === 'del' && confirm('삭제할까요?')) { items.splice(i, 1); await save(); render(); }
 };
 $('#add').onclick = () => { $('#q').value = ''; items.unshift({n: '', k: '', m: ''}); render(true); saveSoon(); };
