@@ -148,10 +148,13 @@ $('#list').onclick = async e => {
   } catch { toast('복사 실패'); }
 };
 
+// 키 칸은 textarea에 CSS로 가려 줄바꿈으로 끝까지 보이게 한다. 미지원 브라우저는 password input으로 대체한다
+const TS = CSS.supports('-webkit-text-security', 'disc');
+if (!TS) $('#dk').replaceWith(Object.assign(document.createElement('input'),
+  {id: 'dk', type: 'password', autocomplete: 'off', spellcheck: false, placeholder: '키'}));
 const dn = $('#dn'), dk = $('#dk'), dm = $('#dm');
-const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; };
-// shortcut: 브라우저가 -webkit-text-security를 지원하지 않으면 대화창 안에서 키가 평문으로 보인다. 지원이 필요하면 password input으로 교체
-const mask = on => dk.classList.toggle('m', on);
+const grow = el => { if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
+const mask = on => TS ? dk.classList.toggle('m', on) : (dk.type = on ? 'password' : 'text');
 function info() {
   const k = dk.value, ws = /\s/.test(k), s = $('#di');
   s.className = 'info' + (ws ? ' w' : '');
