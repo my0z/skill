@@ -2,7 +2,7 @@
 
 사용: python3 whale_scan.py [패널폴더] [탐색일수] [최근일수] [상위N]
       python3 whale_scan.py --live   네이버 거래량 기준 + 종목명 (day.stock 클론 필요)
-      python3 whale_scan.py --bt [패널폴더]   3년 백테스트 (신호 다음날 시가 수익률)
+      python3 whale_scan.py --bt   3년 백테스트 (신호 다음날 시가 수익률). --live 로 받은 거래량이 있으면 거래량 기준
       python3 whale_scan.py --test
 의존: pandas pyarrow
 패널: day.stock 저장소의 surge_data/history/krx_*.parquet (open close inst foreign)
@@ -15,6 +15,8 @@ import pandas as pd
 
 DIR = os.environ.get("PANEL_DIR", "/home/user/my0z/day.stock/surge_data/history")
 # 순매수가 20일 평균 절댓값의 몇 배인지로 등급을 나눈다
+DAYS = 760  # 네이버 일봉 약 3년치
+CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "daily.parquet")
 TIERS = [("purple", 5.0), ("orange", 3.0), ("yellow", 2.0)]
 
 
@@ -55,6 +57,21 @@ def scan(pn, lookback=60, recent=5, top_n=500):
     return sorted(out, key=lambda r: (r[3], r[4]), reverse=True)
 
 
+def backtest_vol(pn):
+    """거래량 신호 3년 백테스트. 수급 O 는 같은 날 기관+외국인 순매수 양수."""
+    d = pd.read_parquet(CACHE)
+    w = {k: d.pivot(index="date", columns="code", values=k).sort_index() for k in ("open", "close", "volume")}
+    t = tiers(w["volume"], w["open"], w["close"])
+    nxt = w["open"].shift(-1) / w["close"] - 1
+    flow = (pn["inst"] + pn["foreign"]).unstack("ticker").reindex_like(t) > 0
+    for name, _ in TIERS:
+        for tag, m in (("전체", t == name), ("수급O", (t == name) & flow)):
+            r = nxt.where(m).stack().dropna()
+            print(f"{name:<7}{tag:<5} n={len(r):>6} 평균 {r.mean()*100:+.2f}% 승률 {(r > 0).mean()*100:.1f}%")
+    r = nxt.stack().dropna()
+    print(f"{'기준':<12} n={len(r):>6} 평균 {r.mean()*100:+.2f}% 승률 {(r > 0).mean()*100:.1f}%")
+
+
 def backtest(pn):
     tier, o = signals(pn)
     nxt = o.shift(-1) / pn["close"].unstack("ticker") - 1  # 종가 매수 다음날 시가 매도
@@ -71,7 +88,10 @@ def live(pn, lookback=60, recent=5, top_n=500):
     from surge import naver  # day.stock 저장소 모듈
 
     u = naver.universe().set_index("code")
-    w = naver.wide(naver.all_daily(list(u.index), 120))
+    long = naver.all_daily(list(u.index), DAYS)
+    os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+    long.to_parquet(CACHE)  # 3년치 거래량 보관. --bt 가 이걸 읽는다
+    w = naver.wide(long)
     t = tiers(w["volume"], w["open"], w["close"]).tail(lookback)
     pool = (w["close"] * w["volume"]).iloc[-1].nlargest(top_n)
     flow = (pn["inst"] + pn["foreign"]).unstack("ticker").iloc[-1]  # 패널 마지막 날 수급
@@ -94,7 +114,7 @@ def main():
     a = [x for x in sys.argv[1:] if not x.startswith("--")]
     pn = load(a[0] if a else DIR)
     if "--bt" in sys.argv:
-        return backtest(pn)
+        return backtest_vol(pn) if os.path.exists(CACHE) else backtest(pn)
     if "--live" in sys.argv:
         return live(pn, *(int(x) for x in a[1:4]))
     lookback, recent, top_n = (int(x) for x in (a[1:4] + ["60", "5", "500"][len(a[1:4]):]))
