@@ -35,7 +35,9 @@ def main(keyword, limit=10):
         w = csv.writer(f)
         w.writerow(["상품명", "가격", "로켓", "제휴링크", "이미지", "원본URL"])
         for p in products:
-            w.writerow([p["productName"], p["productPrice"], p.get("isRocket"), p["productUrl"], p["productImage"], f"https://www.coupang.com/vp/products/{p['productId']}"])
+            row = [p["productName"], p["productPrice"], p.get("isRocket"), p["productUrl"], p["productImage"], f"https://www.coupang.com/vp/products/{p['productId']}"]
+            # 엑셀 수식 주입 방지: 외부 문자열이 = + - @ 탭 CR 로 시작하면 ' 를 붙임
+            w.writerow(["'" + c if isinstance(c, str) and c[:1] in "=+-@\t\r" and c else c for c in row])
     print(f"{len(products)}개 저장: {keyword}.csv\n문구 필수: {DISCLOSURE}")
 
 
