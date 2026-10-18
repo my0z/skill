@@ -1,0 +1,9 @@
+name = "keyvault"
+compatibility_date = "2026-10-01"
+routes = [
+  { pattern = "key.usb.kr", custom_domain = true },
+  { pattern = "key.usb.kr/*", zone_name = "usb.kr" },
+]
+
+[assets]
+directory = "./public"
