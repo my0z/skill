@@ -18,6 +18,9 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 .row .b{display:flex;gap:4px}
 .row input{min-width:0}
 #msg{color:#dc2626;min-height:1.2em}
+.info{grid-column:1/-1;font-size:12px;opacity:.75}
+.info.w{color:#dc2626;opacity:1}
+#st{align-self:center;font-size:12px;opacity:.75}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
 @media(max-width:640px){.row{grid-template-columns:1fr 1fr}.row .b{grid-column:span 2}}
 </style>
@@ -35,6 +38,7 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
       <button id="exp">내보내기</button>
       <button id="imp">가져오기</button>
       <button id="lock">잠금</button>
+      <span id="st"></span>
       <input id="file" type="file" accept=".json" hidden>
     </div>
     <div id="list"></div>
@@ -54,12 +58,24 @@ const derive = async (pw, s) => crypto.subtle.deriveKey(
   await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']),
   {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt']);
 
+// 저장 후 저장소에서 다시 읽어 복호화해 원본과 비교한다
 async function save() {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, enc.encode(JSON.stringify(items)));
-  localStorage.vault = JSON.stringify({s: b64(salt), i: b64(iv), d: b64(ct)});
+  const json = JSON.stringify(items);
+  try {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, enc.encode(json));
+    localStorage.vault = JSON.stringify({s: b64(salt), i: b64(iv), d: b64(ct)});
+    const v = JSON.parse(localStorage.vault);
+    const back = dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d)));
+    $('#st').textContent = back === json ? '저장됨 ✓ ' + new Date().toLocaleTimeString() : '저장 실패!';
+  } catch { $('#st').textContent = '저장 실패!'; }
 }
-const saveSoon = () => { clearTimeout(t1); t1 = setTimeout(save, 400); };
+const saveSoon = () => { $('#st').textContent = '저장 중…'; clearTimeout(t1); t1 = setTimeout(save, 400); };
+const upd = (r, it) => {
+  const k = it.k, ws = /\s/.test(k), s = r.querySelector('.info');
+  s.className = 'info' + (ws ? ' w' : '');
+  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '');
+};
 const toast = m => { const t = $('#toast'); t.textContent = m; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 1200); };
 
 const v0 = () => { try { return JSON.parse(localStorage.vault); } catch { return null; } };
@@ -97,8 +113,9 @@ function render(focus) {
     const r = document.createElement('div');
     r.className = 'row';
     r.dataset.i = i;
-    r.innerHTML = '<input data-f="n" placeholder="이름"><input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false"><input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cp">복사</button><button data-a="del">삭제</button></div>';
+    r.innerHTML = '<input data-f="n" placeholder="이름"><input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false"><input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cp">복사</button><button data-a="del">삭제</button></div><small class="info"></small>';
     for (const f of ['n', 'k', 'm']) r.querySelector(`[data-f=${f}]`).value = it[f];
+    upd(r, it);
     list.append(r);
   });
   if (focus) list.querySelector('input')?.focus();
@@ -107,9 +124,14 @@ function render(focus) {
 $('#list').oninput = e => {
   const f = e.target.dataset.f;
   if (!f) return;
-  items[e.target.closest('.row').dataset.i][f] = e.target.value;
+  const row = e.target.closest('.row');
+  items[row.dataset.i][f] = e.target.value;
+  upd(row, items[row.dataset.i]);
   saveSoon();
 };
+// 키 칸은 입력 중에만 평문으로 보여 오타를 바로 확인한다
+$('#list').addEventListener('focusin', e => { if (e.target.dataset.f === 'k') e.target.type = 'text'; });
+$('#list').addEventListener('focusout', e => { if (e.target.dataset.f === 'k') e.target.type = 'password'; });
 $('#list').onclick = async e => {
   const a = e.target.dataset.a;
   if (!a) return;
