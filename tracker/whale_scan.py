@@ -1,6 +1,7 @@
 """세력 흔적 스캐너: 3년치 수급 패널에서 기관+외국인 순매수 급증 양봉을 찾는다.
 
 사용: python3 whale_scan.py [패널폴더] [탐색일수] [최근일수] [상위N]
+      python3 whale_scan.py --live   네이버 거래량 기준 + 종목명 (day.stock 클론 필요)
       python3 whale_scan.py --bt [패널폴더]   3년 백테스트 (신호 다음날 시가 수익률)
       python3 whale_scan.py --test
 의존: pandas pyarrow
@@ -22,17 +23,19 @@ def load(path=DIR):
     return pn[~pn.index.duplicated(keep="last")].sort_index()
 
 
-def signals(pn, win=20):
-    """date x ticker 등급 표. 값은 purple orange yellow 또는 빈칸."""
-    flow = (pn["inst"] + pn["foreign"]).unstack("ticker")
-    o = pn["open"].unstack("ticker")
-    c = pn["close"].unstack("ticker")
-    ratio = flow / flow.abs().rolling(win).mean().shift(1)
-    ok = (c > o) & (flow > 0)
-    tier = pd.DataFrame("", index=flow.index, columns=flow.columns)
+def tiers(m, o, c, win=20):
+    """date x ticker 등급 표. m 은 거래량 또는 순매수. 값은 purple orange yellow 또는 빈칸."""
+    ratio = m / m.abs().rolling(win).mean().shift(1)
+    ok = (c > o) & (m > 0)
+    tier = pd.DataFrame("", index=m.index, columns=m.columns)
     for name, th in reversed(TIERS):  # 낮은 등급부터 덮어쓴다
         tier = tier.mask(ok & (ratio >= th), name)
-    return tier, o
+    return tier
+
+
+def signals(pn):
+    o = pn["open"].unstack("ticker")
+    return tiers((pn["inst"] + pn["foreign"]).unstack("ticker"), o, pn["close"].unstack("ticker")), o
 
 
 def scan(pn, lookback=60, recent=5, top_n=500):
@@ -62,11 +65,38 @@ def backtest(pn):
     print(f"{'전체':<7} n={len(r):>6} 평균 {r.mean()*100:+.2f}% 승률 {(r > 0).mean()*100:.1f}%")
 
 
+def live(pn, lookback=60, recent=5, top_n=500):
+    """네이버 일봉 거래량 기준 신호 + 거래대금 상위 + 수급 확인. 종목명 포함."""
+    sys.path.insert(0, DIR.rsplit("/surge_data", 1)[0])
+    from surge import naver  # day.stock 저장소 모듈
+
+    u = naver.universe().set_index("code")
+    w = naver.wide(naver.all_daily(list(u.index), 120))
+    t = tiers(w["volume"], w["open"], w["close"]).tail(lookback)
+    pool = (w["close"] * w["volume"]).iloc[-1].nlargest(top_n)
+    flow = (pn["inst"] + pn["foreign"]).unstack("ticker").iloc[-1]  # 패널 마지막 날 수급
+    out = []
+    for tk in pool.index:
+        col = t[tk]
+        if not (col.tail(recent) != "").any():
+            continue
+        last = col.tail(recent)[lambda s: s != ""].index[-1]
+        out.append((u.at[tk, "name"], tk, int(w["close"][tk].iloc[-1]), last.strftime("%m/%d"),
+                    (col == "purple").sum(), (col == "orange").sum(), (col == "yellow").sum(),
+                    "O" if flow.get(tk, 0) > 0 else "-"))
+    out.sort(key=lambda r: (r[4], r[5]), reverse=True)
+    print(f"매집 각인 종목 {len(out)} | 거래대금 상위 {top_n} | 탐색 {lookback}일 | 최근 {recent}일 | 수급확인 O=기관외인 순매수")
+    for i, (nm, tk, cl, ls, p, og, y, f) in enumerate(out, 1):
+        print(f"{i:>2} {nm}({tk}) {cl:,}원 신호 {ls} 보라 {p} 주황 {og} 노랑 {y} 수급 {f}")
+
+
 def main():
-    a = [x for x in sys.argv[1:] if x != "--bt"]
+    a = [x for x in sys.argv[1:] if not x.startswith("--")]
     pn = load(a[0] if a else DIR)
     if "--bt" in sys.argv:
         return backtest(pn)
+    if "--live" in sys.argv:
+        return live(pn, *(int(x) for x in a[1:4]))
     lookback, recent, top_n = (int(x) for x in (a[1:4] + ["60", "5", "500"][len(a[1:4]):]))
     hits = scan(pn, lookback, recent, top_n)
     d = pn.index.get_level_values("date").max()
