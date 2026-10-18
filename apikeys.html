@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API 키 금고</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--card:#f4f4f5;--line:#d4d4d8;--ac:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--card:#1c1c1f;--line:#3f3f46;--ac:#60a5fa}}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui}
+main{max-width:860px;margin:0 auto;padding:16px}
+input,button{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+button{cursor:pointer}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+#gate{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:20vh auto}
+#bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+#q{flex:1;min-width:120px}
+.row{display:grid;grid-template-columns:1fr 2fr 1fr auto;gap:6px;background:var(--card);padding:8px;border-radius:8px;margin-bottom:8px}
+.row .b{display:flex;gap:4px}
+.row input{min-width:0}
+#msg{color:#dc2626;min-height:1.2em}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
+@media(max-width:640px){.row{grid-template-columns:1fr 1fr}.row .b{grid-column:span 2}}
+</style>
+<main>
+  <form id="gate">
+    <h2 id="gt">잠김</h2>
+    <input id="pw" type="password" placeholder="마스터 암호" autocomplete="current-password" autofocus>
+    <button class="p">열기</button>
+    <div id="msg"></div>
+  </form>
+  <section id="app" hidden>
+    <div id="bar">
+      <input id="q" placeholder="검색">
+      <button id="add" class="p">+ 추가</button>
+      <button id="exp">내보내기</button>
+      <button id="imp">가져오기</button>
+      <button id="lock">잠금</button>
+      <input id="file" type="file" accept=".json" hidden>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+const enc = new TextEncoder(), dec = new TextDecoder();
+// shortcut: spread breaks past ~100KB of data; switch to chunked conversion if the vault grows that large
+const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+let key, salt, items = [], t1, t2;
+
+const derive = async (pw, s) => crypto.subtle.deriveKey(
+  {name: 'PBKDF2', salt: s, iterations: 310000, hash: 'SHA-256'},
+  await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']),
+  {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt']);
+
+async function save() {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, enc.encode(JSON.stringify(items)));
+  localStorage.vault = JSON.stringify({s: b64(salt), i: b64(iv), d: b64(ct)});
+}
+const saveSoon = () => { clearTimeout(t1); t1 = setTimeout(save, 400); };
+const toast = m => { const t = $('#toast'); t.textContent = m; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 1200); };
+
+const v0 = () => { try { return JSON.parse(localStorage.vault); } catch { return null; } };
+if (!v0()) $('#gt').textContent = '새 금고: 암호 설정 (8자 이상)';
+
+$('#gate').onsubmit = async e => {
+  e.preventDefault();
+  const pw = $('#pw').value, v = v0();
+  $('#msg').textContent = '';
+  if (!v) {
+    if (pw.length < 8) return $('#msg').textContent = '8자 이상 필요';
+    salt = crypto.getRandomValues(new Uint8Array(16));
+    key = await derive(pw, salt);
+    items = [];
+    await save();
+  } else {
+    salt = unb64(v.s);
+    key = await derive(pw, salt);
+    try {
+      items = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d))));
+    } catch { key = null; return $('#msg').textContent = '암호 틀림'; }
+  }
+  $('#pw').value = '';
+  $('#gate').hidden = true;
+  $('#app').hidden = false;
+  render();
+  idle();
+};
+
+function render(focus) {
+  const q = $('#q').value.toLowerCase(), list = $('#list');
+  list.textContent = '';
+  items.forEach((it, i) => {
+    if (q && !(it.n + it.m).toLowerCase().includes(q)) return;
+    const r = document.createElement('div');
+    r.className = 'row';
+    r.dataset.i = i;
+    r.innerHTML = '<input data-f="n" placeholder="이름"><input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false"><input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cp">복사</button><button data-a="del">삭제</button></div>';
+    for (const f of ['n', 'k', 'm']) r.querySelector(`[data-f=${f}]`).value = it[f];
+    list.append(r);
+  });
+  if (focus) list.querySelector('input')?.focus();
+}
+
+$('#list').oninput = e => {
+  const f = e.target.dataset.f;
+  if (!f) return;
+  items[e.target.closest('.row').dataset.i][f] = e.target.value;
+  saveSoon();
+};
+$('#list').onclick = async e => {
+  const a = e.target.dataset.a;
+  if (!a) return;
+  const row = e.target.closest('.row'), i = row.dataset.i, k = row.querySelector('[data-f=k]');
+  if (a === 'eye') { k.type = k.type === 'password' ? 'text' : 'password'; e.target.textContent = k.type === 'text' ? '숨김' : '보기'; }
+  if (a === 'cp') { await navigator.clipboard.writeText(items[i].k); toast('복사됨'); }
+  if (a === 'del' && confirm('삭제할까요?')) { items.splice(i, 1); await save(); render(); }
+};
+$('#add').onclick = () => { $('#q').value = ''; items.unshift({n: '', k: '', m: ''}); render(true); saveSoon(); };
+$('#q').oninput = () => render();
+$('#lock').onclick = () => location.reload();
+$('#exp').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([localStorage.vault], {type: 'application/json'}));
+  a.download = 'apikeys-vault.json';
+  a.click();
+};
+$('#imp').onclick = () => $('#file').click();
+$('#file').onchange = async e => {
+  try {
+    const v = JSON.parse(await e.target.files[0].text());
+    if (!v.s || !v.i || !v.d) throw 0;
+    if (!confirm('현재 금고를 덮어쓸까요?')) return;
+    localStorage.vault = JSON.stringify(v);
+    location.reload();
+  } catch { toast('잘못된 파일'); }
+};
+
+// 5분 무입력 시 자동 잠금
+function idle() { clearTimeout(t2); t2 = setTimeout(() => location.reload(), 300000); }
+['input', 'click', 'keydown'].forEach(ev => addEventListener(ev, () => key && idle()));
+</script>
