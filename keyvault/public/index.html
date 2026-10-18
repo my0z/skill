@@ -8,22 +8,24 @@
 @media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--card:#1c1c1f;--line:#3f3f46;--ac:#60a5fa}}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui}
 main{max-width:860px;margin:0 auto;padding:16px}
-input,button{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+input,button,textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+textarea{resize:none;overflow:hidden;word-break:break-all;display:block;box-sizing:border-box}
+[hidden]{display:none!important}
+.m{-webkit-text-security:disc}
 button{cursor:pointer}
 button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 #gate{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:20vh auto}
 #bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 #q{flex:1;min-width:120px}
-.row{display:grid;grid-template-columns:1fr 2fr 1fr auto;gap:6px;background:var(--card);padding:8px;border-radius:8px;margin-bottom:8px}
-.row .b{display:flex;gap:4px}
-.row input{min-width:0}
+.row{display:grid;grid-template-columns:1fr;gap:6px;background:var(--card);padding:8px;border-radius:8px;margin-bottom:8px}
+.row .b{display:flex;flex-wrap:wrap;gap:4px}
+.row [data-f=k]{font-family:ui-monospace,monospace;font-size:13px}
+.row input,.row textarea{min-width:0}
 #msg{color:#dc2626;min-height:1.2em}
 .info{grid-column:1/-1;font-size:12px;opacity:.75}
 .info.w{color:#dc2626;opacity:1}
 #st{align-self:center;font-size:12px;opacity:.75}
-#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}
-@media(max-width:640px){.row{grid-template-columns:1fr 1fr}.row .b{grid-column:span 2}}
-</style>
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:6px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none}</style>
 <main>
   <form id="gate">
     <h2 id="gt">잠김</h2>
@@ -71,6 +73,13 @@ async function save() {
   } catch { $('#st').textContent = '저장 실패!'; }
 }
 const saveSoon = () => { $('#st').textContent = '저장 중…'; clearTimeout(t1); t1 = setTimeout(save, 400); };
+// textarea는 줄바꿈으로 끝까지 보이고 CSS로 가린다. 미지원 브라우저는 password input으로 대체한다
+const TS = CSS.supports('-webkit-text-security', 'disc');
+const KEY = TS ? '<textarea rows="1" data-f="k" class="m" placeholder="키" spellcheck="false"></textarea>'
+  : '<input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false">';
+const masked = el => TS ? el.classList.contains('m') : el.type === 'password';
+const mask = (el, on) => TS ? el.classList.toggle('m', on) : (el.type = on ? 'password' : 'text');
+const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; };
 const upd = (r, it) => {
   const k = it.k, ws = /\s/.test(k), s = r.querySelector('.info');
   s.className = 'info' + (ws ? ' w' : '');
@@ -113,10 +122,11 @@ function render(focus) {
     const r = document.createElement('div');
     r.className = 'row';
     r.dataset.i = i;
-    r.innerHTML = '<input data-f="n" placeholder="이름"><input data-f="k" type="password" placeholder="키" autocomplete="off" spellcheck="false"><input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cpn">이름복사</button><button data-a="cpk">키복사</button><button data-a="cpb">둘다복사</button><button data-a="del">삭제</button></div><small class="info"></small>';
+    r.innerHTML = '<textarea rows="1" data-f="n" placeholder="이름"></textarea>' + KEY + '<input data-f="m" placeholder="메모"><div class="b"><button data-a="eye">보기</button><button data-a="cpn">이름복사</button><button data-a="cpk">키복사</button><button data-a="cpb">둘다복사</button><button data-a="del">삭제</button></div><small class="info"></small>';
     for (const f of ['n', 'k', 'm']) r.querySelector(`[data-f=${f}]`).value = it[f];
     upd(r, it);
     list.append(r);
+    r.querySelectorAll('textarea').forEach(grow);
   });
   if (focus) list.querySelector('input')?.focus();
 }
@@ -127,16 +137,19 @@ $('#list').oninput = e => {
   const row = e.target.closest('.row');
   items[row.dataset.i][f] = e.target.value;
   upd(row, items[row.dataset.i]);
+  grow(e.target);
   saveSoon();
 };
 // 키 칸은 입력 중에만 평문으로 보여 오타를 바로 확인한다
-$('#list').addEventListener('focusin', e => { if (e.target.dataset.f === 'k') e.target.type = 'text'; });
-$('#list').addEventListener('focusout', e => { if (e.target.dataset.f === 'k') e.target.type = 'password'; });
+$('#list').addEventListener('focusin', e => { if (e.target.dataset.f === 'k') mask(e.target, false); });
+$('#list').addEventListener('focusout', e => { if (e.target.dataset.f === 'k') mask(e.target, true); });
+$('#list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA') e.preventDefault(); });
+addEventListener('resize', () => document.querySelectorAll('#list textarea').forEach(grow));
 $('#list').onclick = async e => {
   const a = e.target.dataset.a;
   if (!a) return;
   const row = e.target.closest('.row'), i = row.dataset.i, k = row.querySelector('[data-f=k]');
-  if (a === 'eye') { k.type = k.type === 'password' ? 'text' : 'password'; e.target.textContent = k.type === 'text' ? '숨김' : '보기'; }
+  if (a === 'eye') { mask(k, !masked(k)); e.target.textContent = masked(k) ? '보기' : '숨김'; }
   const CP = {cpn: it => it.n, cpk: it => it.k, cpb: it => it.n + '=' + it.k};
   if (CP[a]) { await navigator.clipboard.writeText(CP[a](items[i])); toast('복사됨'); }
   if (a === 'del' && confirm('삭제할까요?')) { items.splice(i, 1); await save(); render(); }
