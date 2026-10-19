@@ -96,7 +96,7 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 // shortcut: spread breaks past ~100KB of data; switch to chunked conversion if the vault grows that large
 const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-let key, salt, items = [], ed = -1, t2;
+let key, salt, items = [], ed = -1, t2, exp;
 
 const derive = async (pw, s) => crypto.subtle.deriveKey(
   {name: 'PBKDF2', salt: s, iterations: 310000, hash: 'SHA-256'},
@@ -115,6 +115,25 @@ async function save() {
     $('#st').textContent = back === json ? '저장됨 ✓ ' + new Date().toLocaleTimeString() : '저장 실패!';
   } catch { $('#st').textContent = '저장 실패!'; }
 }
+// 로그인은 2시간 유지된다. 꺼낼 수 없는(non-extractable) 키 객체만 IndexedDB에 두고 암호는 저장하지 않는다
+const idb = () => new Promise((res, rej) => {
+  const r = indexedDB.open('vault', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('s');
+  r.onsuccess = () => res(r.result);
+  r.onerror = () => rej(r.error);
+});
+const sget = async () => {
+  try {
+    const db = await idb();
+    return await new Promise(res => { const r = db.transaction('s').objectStore('s').get('k'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); });
+  } catch { return null; }
+};
+const sset = async v => {
+  try {
+    const db = await idb();
+    await new Promise(res => { const t = db.transaction('s', 'readwrite'); v ? t.objectStore('s').put(v, 'k') : t.objectStore('s').delete('k'); t.oncomplete = res; t.onerror = res; });
+  } catch {}
+};
 const toast = m => { const t = $('#toast'); t.textContent = m; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 1200); };
 
 const v0 = () => { try { return JSON.parse(localStorage.vault); } catch { return null; } };
@@ -138,10 +157,9 @@ $('#gate').onsubmit = async e => {
     } catch { key = null; return $('#msg').textContent = '암호 틀림'; }
   }
   $('#pw').value = '';
-  $('#gate').hidden = true;
-  $('#app').hidden = false;
-  render();
-  idle();
+  exp = Date.now() + 2 * 3600e3;
+  await sset({key, salt: b64(salt), exp});
+  enter();
 };
 
 // 목록에는 이름만 보인다. 이름을 누르면 이름 복사 키는 옆 버튼으로만 복사한다
@@ -278,7 +296,7 @@ addEventListener('resize', () => [dn, dk].forEach(grow));
 
 $('#add').onclick = () => openDlg(-1);
 $('#q').oninput = render;
-$('#lock').onclick = () => location.reload();
+$('#lock').onclick = () => lock();
 $('#exp').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([localStorage.vault], {type: 'application/json'}));
@@ -344,7 +362,28 @@ $('#ic').onclick = () => $('#idg').close();
 // 닫을 때 풀어 둔 내용을 지운다
 $('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent = ''; flag(new Set()); };
 
-// 5분 무입력 시 자동 잠금
-function idle() { clearTimeout(t2); t2 = setTimeout(() => location.reload(), 300000); }
-['input', 'click', 'keydown'].forEach(ev => addEventListener(ev, () => key && idle()));
+// 만료되거나 잠금을 누르면 저장된 세션 키를 지우고 다시 잠근다
+async function lock() { await sset(null); location.reload(); }
+function enter() {
+  $('#gate').hidden = true;
+  $('#app').hidden = false;
+  render();
+  clearTimeout(t2);
+  t2 = setTimeout(lock, Math.max(0, exp - Date.now()));
+}
+// 절전 등으로 타이머가 밀렸을 수 있어 탭이 다시 보일 때도 만료를 확인한다
+addEventListener('visibilitychange', () => { if (key && Date.now() > exp) lock(); });
+
+// 페이지를 열 때 아직 만료 전이고 금고가 그대로면 암호 없이 복원한다
+(async () => {
+  try {
+    const s = await sget(), v = v0();
+    if (!s || !v || s.exp < Date.now() || s.salt !== v.s) return sset(null);
+    key = s.key;
+    salt = unb64(v.s);
+    exp = s.exp;
+    items = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d))));
+    enter();
+  } catch { key = null; sset(null); }
+})();
 </script>
