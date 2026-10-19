@@ -153,13 +153,9 @@ function render() {
     const r = document.createElement('div');
     r.className = 'row';
     r.dataset.i = i;
-    // 검색 중에는 보이는 항목 사이 순서가 모호해서 위아래 버튼을 숨긴다
-    r.innerHTML = (q ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span><button data-a="up" title="위로" aria-label="위로">▲</button><button data-a="dn" title="아래로" aria-label="아래로">▼</button>')
+    // 검색 중에는 보이는 항목 사이 순서가 모호해서 끌기 핸들을 숨긴다
+    r.innerHTML = (q ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span>')
       + '<button class="nm" data-a="cpn"></button><button data-a="cpk">키복사</button><button data-a="ed">수정</button>';
-    if (!q) {
-      r.querySelector('[data-a=up]').disabled = i === 0;
-      r.querySelector('[data-a=dn]').disabled = i === items.length - 1;
-    }
     r.querySelector('.nm').textContent = it.n;
     r.querySelector('.nm').title = it.m;
     list.append(r);
@@ -171,13 +167,6 @@ $('#list').onclick = async e => {
   if (!b) return;
   const i = +b.closest('.row').dataset.i, a = b.dataset.a;
   if (a === 'ed') return openDlg(i);
-  if (a === 'up' || a === 'dn') {
-    const j = a === 'up' ? i - 1 : i + 1;
-    [items[i], items[j]] = [items[j], items[i]];
-    render();
-    $(`#list .row[data-i="${j}"] [data-a=${a}]`)?.focus();
-    return save();
-  }
   try {
     await navigator.clipboard.writeText(a === 'cpn' ? items[i].n : items[i].k);
     toast(a === 'cpn' ? '이름 복사됨' : '키 복사됨');
