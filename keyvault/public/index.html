@@ -65,7 +65,7 @@ dialog h3{margin:0}
     </div>
     <div id="list"></div>
     <div id="tmp">
-      <textarea id="tt" rows="5" placeholder="임시 붙여넣기 (저장되지 않고 잠그거나 새로고침하면 지워짐)" spellcheck="false"></textarea>
+      <textarea id="tt" rows="5" autocomplete="off" placeholder="임시 붙여넣기 (저장되지 않고 잠그거나 새로고침하면 지워짐)" spellcheck="false"></textarea>
       <div class="b"><button id="tc">복사</button><button id="tx">지우기</button></div>
     </div>
   </section>
@@ -307,6 +307,8 @@ $('#tc').onclick = async () => {
   try { await navigator.clipboard.writeText($('#tt').value); toast('복사됨'); } catch { toast('복사 실패'); }
 };
 $('#tx').onclick = () => { $('#tt').value = ''; $('#tt').focus(); };
+// 새로고침이나 뒤로가기 캐시에서 브라우저가 입력값을 되살리지 못하게 떠날 때 비운다
+addEventListener('pagehide', () => { $('#tt').value = ''; });
 $('#q').oninput = render;
 $('#lock').onclick = () => lock();
 $('#exp').onclick = () => {
@@ -380,6 +382,7 @@ async function lock() {
   if (locking) return;
   locking = true;
   key = sess = null;
+  $('#tt').value = '';
   clearTimeout(t2);
   clearTimeout(t3);
   await sset(null);
