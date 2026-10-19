@@ -158,7 +158,8 @@ $('#gate').onsubmit = async e => {
   }
   $('#pw').value = '';
   exp = Date.now() + 2 * 3600e3;
-  await sset({key, salt: b64(salt), exp});
+  sess = {key, salt: b64(salt), exp, act: Date.now()};
+  await sset(sess);
   enter();
 };
 
@@ -370,15 +371,29 @@ function enter() {
   render();
   clearTimeout(t2);
   t2 = setTimeout(lock, Math.max(0, exp - Date.now()));
+  touch();
 }
-// 절전 등으로 타이머가 밀렸을 수 있어 탭이 다시 보일 때도 만료를 확인한다
-addEventListener('visibilitychange', () => { if (key && Date.now() > exp) lock(); });
+// 무입력 30분이면 2시간 안이어도 잠근다. 마지막 활동 시각을 세션에 적어 두어 탭을 닫았다 열어도 적용된다
+const IDLE = 30 * 60e3;
+let sess, t3, lastW = 0;
+function touch() {
+  if (!key) return;
+  const n = Date.now();
+  sess.act = n;
+  clearTimeout(t3);
+  t3 = setTimeout(lock, IDLE);
+  if (n - lastW > 30e3) { lastW = n; sset(sess); }
+}
+['input', 'click', 'keydown'].forEach(ev => addEventListener(ev, touch));
+// 절전 등으로 타이머가 밀렸을 수 있어 탭이 다시 보일 때도 확인한다
+addEventListener('visibilitychange', () => { if (key && (Date.now() > exp || Date.now() - sess.act > IDLE)) lock(); });
 
 // 페이지를 열 때 아직 만료 전이고 금고가 그대로면 암호 없이 복원한다
 (async () => {
   try {
     const s = await sget(), v = v0();
-    if (!s || !v || s.exp < Date.now() || s.salt !== v.s) return sset(null);
+    if (!s || !v || s.exp < Date.now() || Date.now() - s.act > IDLE || s.salt !== v.s) return sset(null);
+    sess = s;
     key = s.key;
     salt = unb64(v.s);
     exp = s.exp;
