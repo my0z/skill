@@ -75,7 +75,7 @@ dialog h3{margin:0}
     <h3 id="dt"></h3>
     <textarea id="dn" rows="1" placeholder="이름" required></textarea>
     <textarea id="dk" class="m" rows="1" placeholder="키" spellcheck="false"></textarea>
-    <input id="dm" placeholder="메모">
+    <textarea id="dm" rows="2" placeholder="메모"></textarea>
     <small id="di" class="info"></small>
     <div class="b">
       <button class="p">저장</button>
@@ -271,14 +271,14 @@ function openDlg(i) {
   $('#dx').hidden = i < 0;
   mask(true);
   $('#dlg').showModal();
-  [dn, dk].forEach(grow);
+  [dn, dk, dm].forEach(grow);
   info();
 }
 // 키 칸은 입력 중에만 평문으로 보여 오타를 바로 확인한다
 dk.onfocus = () => mask(false);
 dk.onblur = () => mask(true);
 $('#f').oninput = e => { if (e.target.tagName === 'TEXTAREA') grow(e.target); info(); };
-$('#f').onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA') { e.preventDefault(); $('#f').requestSubmit(); } };
+$('#f').onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA' && e.target !== dm) { e.preventDefault(); $('#f').requestSubmit(); } };
 $('#f').onsubmit = async e => {
   e.preventDefault();
   if (dupOf().msg) return dk.focus();
@@ -299,7 +299,7 @@ $('#dx').onclick = async () => {
 };
 // 닫을 때 입력값을 지워 키가 화면 밖 DOM에 남지 않게 한다
 $('#dlg').onclose = () => { dn.value = dk.value = dm.value = ''; flag(new Set()); };
-addEventListener('resize', () => [dn, dk].forEach(grow));
+addEventListener('resize', () => [dn, dk, dm].forEach(grow));
 
 $('#add').onclick = () => openDlg(-1);
 // 임시 붙여넣기 칸은 메모리에만 있다. 저장하지 않으므로 잠그거나 새로고침하면 사라진다
