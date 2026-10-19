@@ -19,6 +19,10 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 #bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 #q{flex:1;min-width:120px}
 .row{display:flex;gap:6px;align-items:center;background:var(--card);padding:6px 8px;border-radius:8px;margin-bottom:6px}
+.hd{cursor:grab;touch-action:none;user-select:none;padding:8px 6px;opacity:.6}
+.row.drag{opacity:.6;outline:2px solid var(--ac)}
+.row.drop-up{box-shadow:0 -3px 0 var(--ac)}
+.row.drop-dn{box-shadow:0 3px 0 var(--ac)}
 .row.dupe{background:rgba(220,38,38,.18);box-shadow:inset 4px 0 #dc2626;font-weight:700}
 .nm{flex:1;min-width:0;text-align:left;word-break:break-all;background:transparent;border-color:transparent}
 #msg{color:#dc2626;min-height:1.2em}
@@ -150,7 +154,7 @@ function render() {
     r.className = 'row';
     r.dataset.i = i;
     // 검색 중에는 보이는 항목 사이 순서가 모호해서 위아래 버튼을 숨긴다
-    r.innerHTML = (q ? '' : '<button data-a="up" title="위로" aria-label="위로">▲</button><button data-a="dn" title="아래로" aria-label="아래로">▼</button>')
+    r.innerHTML = (q ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span><button data-a="up" title="위로" aria-label="위로">▲</button><button data-a="dn" title="아래로" aria-label="아래로">▼</button>')
       + '<button class="nm" data-a="cpn"></button><button data-a="cpk">키복사</button><button data-a="ed">수정</button>';
     if (!q) {
       r.querySelector('[data-a=up]').disabled = i === 0;
@@ -179,6 +183,43 @@ $('#list').onclick = async e => {
     toast(a === 'cpn' ? '이름 복사됨' : '키 복사됨');
   } catch { toast('복사 실패'); }
 };
+
+// 드래그로 순서 바꾸기: 포인터 이벤트라 마우스와 터치가 같이 된다. 핸들을 잡고 끌어 놓은 자리로 옮긴다
+// shortcut: 화면 가장자리 자동 스크롤은 포인터가 움직일 때만 한 번씩 일어난다. 긴 목록에서 불편하면 타이머로 바꾼다
+let drag;
+const dragEnd = () => {
+  document.querySelectorAll('#list .row').forEach(r => r.classList.remove('drag', 'drop-up', 'drop-dn'));
+  drag = null;
+};
+$('#list').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.hd');
+  if (!h) return;
+  const row = h.closest('.row'), i = +row.dataset.i;
+  drag = {from: i, to: i};
+  row.classList.add('drag');
+  h.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+$('#list').addEventListener('pointermove', e => {
+  if (!drag) return;
+  const rows = [...document.querySelectorAll('#list .row')];
+  const hit = rows.find(r => { const b = r.getBoundingClientRect(); return e.clientY >= b.top && e.clientY <= b.bottom; })
+    || (e.clientY < rows[0].getBoundingClientRect().top ? rows[0] : rows.at(-1));
+  drag.to = +hit.dataset.i;
+  rows.forEach(r => r.classList.toggle('drop-up', r === hit && drag.to < drag.from));
+  rows.forEach(r => r.classList.toggle('drop-dn', r === hit && drag.to > drag.from));
+  if (e.clientY < 50) scrollBy(0, -12); else if (e.clientY > innerHeight - 50) scrollBy(0, 12);
+});
+$('#list').addEventListener('pointerup', () => {
+  if (!drag) return;
+  const {from, to} = drag;
+  dragEnd();
+  if (from === to) return;
+  items.splice(to, 0, ...items.splice(from, 1));
+  render();
+  save();
+});
+$('#list').addEventListener('pointercancel', dragEnd);
 
 // 키 칸은 textarea에 CSS로 가려 줄바꿈으로 끝까지 보이게 한다. 미지원 브라우저는 password input으로 대체한다
 const TS = CSS.supports('-webkit-text-security', 'disc');
