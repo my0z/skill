@@ -26,6 +26,8 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 .row.dupe{background:rgba(220,38,38,.18);box-shadow:inset 4px 0 #dc2626;font-weight:700}
 .nm{flex:1;min-width:0;text-align:left;word-break:break-all;background:transparent;border-color:transparent}
 #msg{color:#dc2626;min-height:1.2em}
+#tmp{margin-top:16px;display:grid;gap:6px}
+#tt{width:100%;resize:vertical;overflow:auto}
 .info{font-size:12px;opacity:.75}
 .info.w{color:#dc2626;opacity:1}
 #st{align-self:center;font-size:12px;opacity:.75}
@@ -62,6 +64,10 @@ dialog h3{margin:0}
       <input id="file" type="file" accept=".json" hidden>
     </div>
     <div id="list"></div>
+    <div id="tmp">
+      <textarea id="tt" rows="5" placeholder="임시 붙여넣기 (저장되지 않고 잠그거나 새로고침하면 지워짐)" spellcheck="false"></textarea>
+      <div class="b"><button id="tc">복사</button><button id="tx">지우기</button></div>
+    </div>
   </section>
 </main>
 <dialog id="dlg">
@@ -296,6 +302,11 @@ $('#dlg').onclose = () => { dn.value = dk.value = dm.value = ''; flag(new Set())
 addEventListener('resize', () => [dn, dk].forEach(grow));
 
 $('#add').onclick = () => openDlg(-1);
+// 임시 붙여넣기 칸은 메모리에만 있다. 저장하지 않으므로 잠그거나 새로고침하면 사라진다
+$('#tc').onclick = async () => {
+  try { await navigator.clipboard.writeText($('#tt').value); toast('복사됨'); } catch { toast('복사 실패'); }
+};
+$('#tx').onclick = () => { $('#tt').value = ''; $('#tt').focus(); };
 $('#q').oninput = render;
 $('#lock').onclick = () => lock();
 $('#exp').onclick = () => {
