@@ -156,12 +156,17 @@ if (!TS) $('#dk').replaceWith(Object.assign(document.createElement('input'),
 const dn = $('#dn'), dk = $('#dk'), dm = $('#dm');
 const grow = el => { if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
 const mask = on => TS ? dk.classList.toggle('m', on) : (dk.type = on ? 'password' : 'text');
-// 다른 항목에 같은 키가 있으면 그 항목을 돌려준다 (공백 차이는 무시)
-const dupOf = () => dk.value.trim() ? items.find((it, i) => i !== ed && it.k.trim() === dk.value.trim()) : null;
+// 다른 항목과 이름이나 키가 같으면 이유를 돌려준다 (공백 차이는 무시하고 이름은 대소문자도 무시)
+const dupOf = () => {
+  const n = dn.value.trim().toLowerCase(), k = dk.value.trim(), o = items.filter((_, i) => i !== ed);
+  const byName = n && o.find(it => it.n.trim().toLowerCase() === n);
+  const byKey = k && o.find(it => it.k.trim() === k);
+  return [byName && '같은 이름 있음', byKey && `같은 키 있음: ${byKey.n}`].filter(Boolean).join(' · ');
+};
 function info() {
   const k = dk.value, ws = /\s/.test(k), d = dupOf(), s = $('#di');
   s.className = 'info' + (ws || d ? ' w' : '');
-  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d ? ` · ⛔ 이미 등록됨: ${d.n}` : '');
+  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d ? ` · ⛔ ${d}` : '');
   $('#f .p').disabled = !!d;
 }
 function openDlg(i) {
