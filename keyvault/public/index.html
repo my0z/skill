@@ -19,6 +19,7 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 #bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 #q{flex:1;min-width:120px}
 .row{display:flex;gap:6px;align-items:center;background:var(--card);padding:6px 8px;border-radius:8px;margin-bottom:6px}
+.row.dupe{background:rgba(220,38,38,.18);box-shadow:inset 4px 0 #dc2626;font-weight:700}
 .nm{flex:1;min-width:0;text-align:left;word-break:break-all;background:transparent;border-color:transparent}
 #msg{color:#dc2626;min-height:1.2em}
 .info{font-size:12px;opacity:.75}
@@ -148,7 +149,13 @@ function render() {
     const r = document.createElement('div');
     r.className = 'row';
     r.dataset.i = i;
-    r.innerHTML = '<button class="nm" data-a="cpn"></button><button data-a="cpk">키복사</button><button data-a="ed">수정</button>';
+    // 검색 중에는 보이는 항목 사이 순서가 모호해서 위아래 버튼을 숨긴다
+    r.innerHTML = (q ? '' : '<button data-a="up" title="위로" aria-label="위로">▲</button><button data-a="dn" title="아래로" aria-label="아래로">▼</button>')
+      + '<button class="nm" data-a="cpn"></button><button data-a="cpk">키복사</button><button data-a="ed">수정</button>';
+    if (!q) {
+      r.querySelector('[data-a=up]').disabled = i === 0;
+      r.querySelector('[data-a=dn]').disabled = i === items.length - 1;
+    }
     r.querySelector('.nm').textContent = it.n;
     r.querySelector('.nm').title = it.m;
     list.append(r);
@@ -160,6 +167,13 @@ $('#list').onclick = async e => {
   if (!b) return;
   const i = +b.closest('.row').dataset.i, a = b.dataset.a;
   if (a === 'ed') return openDlg(i);
+  if (a === 'up' || a === 'dn') {
+    const j = a === 'up' ? i - 1 : i + 1;
+    [items[i], items[j]] = [items[j], items[i]];
+    render();
+    $(`#list .row[data-i="${j}"] [data-a=${a}]`)?.focus();
+    return save();
+  }
   try {
     await navigator.clipboard.writeText(a === 'cpn' ? items[i].n : items[i].k);
     toast(a === 'cpn' ? '이름 복사됨' : '키 복사됨');
@@ -180,13 +194,19 @@ const match = (n, k, others) => ({
 });
 const dupOf = () => {
   const {byName, byKey} = match(dn.value, dk.value, items.filter((_, i) => i !== ed));
-  return [byName && '같은 이름 있음', byKey && `같은 키 있음: ${byKey.n}`].filter(Boolean).join(' · ');
+  return {byName, msg: [byName && '같은 이름 있음', byKey && `같은 키 있음: ${byKey.n}`].filter(Boolean).join(' · ')};
+};
+// 같은 이름이 이미 있는 항목을 목록에서 강조하고 화면 안으로 가져온다
+const flag = set => {
+  document.querySelectorAll('#list .row').forEach(r => r.classList.toggle('dupe', set.has(items[r.dataset.i])));
+  $('#list .dupe')?.scrollIntoView({block: 'center'});
 };
 function info() {
   const k = dk.value, ws = /\s/.test(k), d = dupOf(), s = $('#di');
-  s.className = 'info' + (ws || d ? ' w' : '');
-  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d ? ` · ⛔ ${d}` : '');
-  $('#f .p').disabled = !!d;
+  s.className = 'info' + (ws || d.msg ? ' w' : '');
+  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d.msg ? ` · ⛔ ${d.msg}` : '');
+  $('#f .p').disabled = !!d.msg;
+  flag(new Set(d.byName ? [d.byName] : []));
 }
 function openDlg(i) {
   ed = i;
@@ -206,7 +226,7 @@ $('#f').oninput = e => { if (e.target.tagName === 'TEXTAREA') grow(e.target); in
 $('#f').onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA') { e.preventDefault(); $('#f').requestSubmit(); } };
 $('#f').onsubmit = async e => {
   e.preventDefault();
-  if (dupOf()) return dk.focus();
+  if (dupOf().msg) return dk.focus();
   const it = {n: dn.value.trim(), k: dk.value, m: dm.value};
   if (!it.n) return dn.focus();
   if (ed < 0) items.unshift(it); else items[ed] = it;
@@ -223,7 +243,7 @@ $('#dx').onclick = async () => {
   await save();
 };
 // 닫을 때 입력값을 지워 키가 화면 밖 DOM에 남지 않게 한다
-$('#dlg').onclose = () => { dn.value = dk.value = dm.value = ''; };
+$('#dlg').onclose = () => { dn.value = dk.value = dm.value = ''; flag(new Set()); };
 addEventListener('resize', () => [dn, dk].forEach(grow));
 
 $('#add').onclick = () => openDlg(-1);
@@ -269,13 +289,14 @@ $('#if').onsubmit = async e => {
     list = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(imp.i)}, k2, unb64(imp.d))));
     if (!Array.isArray(list)) throw 0;
   } catch { return ir.textContent = '암호 틀림'; }
-  const pool = [...items];
+  const pool = [...items], hit = new Set();
   let skip = 0;
   impAdd = [];
   ir.textContent = '';
   for (const x of list.filter(x => x && typeof x.n === 'string' && typeof x.k === 'string')) {
     const it = {n: x.n.trim(), k: x.k, m: String(x.m ?? '')};
     const {byName, byKey} = match(it.n, it.k, pool);
+    if (byName) hit.add(byName);
     const ok = it.n && !byName && !byKey;
     if (ok) { pool.push(it); impAdd.push(it); } else skip++;
     const r = document.createElement('div');
@@ -284,13 +305,14 @@ $('#if').onsubmit = async e => {
     ir.append(r);
   }
   ir.prepend(sp(`추가 ${impAdd.length}개 · 건너뜀 ${skip}개`, 'sum'));
+  flag(hit);
   ip.hidden = true;
   $('#ig').textContent = `추가 ${impAdd.length}개`;
   $('#ig').disabled = !impAdd.length;
 };
 $('#ic').onclick = () => $('#idg').close();
 // 닫을 때 풀어 둔 내용을 지운다
-$('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent = ''; };
+$('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent = ''; flag(new Set()); };
 
 // 5분 무입력 시 자동 잠금
 function idle() { clearTimeout(t2); t2 = setTimeout(() => location.reload(), 300000); }
