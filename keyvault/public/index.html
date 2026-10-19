@@ -364,7 +364,30 @@ $('#ic').onclick = () => $('#idg').close();
 $('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent = ''; flag(new Set()); };
 
 // 만료되거나 잠금을 누르면 저장된 세션 키를 지우고 다시 잠근다
-async function lock() { await sset(null); location.reload(); }
+let locking;
+async function lock() {
+  if (locking) return;
+  locking = true;
+  key = sess = null;
+  clearTimeout(t2);
+  clearTimeout(t3);
+  await sset(null);
+  location.reload();
+}
+// 세션 기록이 아직 있을 때만 갱신한다. 다른 탭에서 잠갔다면 false를 돌려줘 이 탭도 잠그게 한다
+const supd = async v => {
+  try {
+    const db = await idb();
+    let ok = false;
+    await new Promise(res => {
+      const t = db.transaction('s', 'readwrite'), st = t.objectStore('s');
+      st.get('k').onsuccess = e => { if (e.target.result) { ok = true; st.put(v, 'k'); } };
+      t.oncomplete = res;
+      t.onerror = res;
+    });
+    return ok;
+  } catch { return true; }
+};
 function enter() {
   $('#gate').hidden = true;
   $('#app').hidden = false;
@@ -377,12 +400,12 @@ function enter() {
 const IDLE = 30 * 60e3;
 let sess, t3, lastW = 0;
 function touch() {
-  if (!key) return;
+  if (!key || locking) return;
   const n = Date.now();
   sess.act = n;
   clearTimeout(t3);
   t3 = setTimeout(lock, IDLE);
-  if (n - lastW > 30e3) { lastW = n; sset(sess); }
+  if (n - lastW > 30e3) { lastW = n; supd(sess).then(ok => { if (!ok) lock(); }); }
 }
 ['input', 'click', 'keydown'].forEach(ev => addEventListener(ev, touch));
 // 절전 등으로 타이머가 밀렸을 수 있어 탭이 다시 보일 때도 확인한다
