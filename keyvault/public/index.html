@@ -26,9 +26,15 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 #st{align-self:center;font-size:12px;opacity:.75}
 dialog{border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);width:min(560px,calc(100vw - 32px));padding:16px}
 dialog::backdrop{background:rgba(0,0,0,.45)}
-#f{display:grid;gap:8px}
-#f h3{margin:0}
-#f input,#f textarea{width:100%;box-sizing:border-box}
+#f,#if{display:grid;gap:8px}
+dialog h3{margin:0}
+#f input,#f textarea,#if input{width:100%;box-sizing:border-box}
+#ir{max-height:50vh;overflow:auto;display:grid;gap:4px}
+.sum{font-weight:600}
+.ir-row{display:flex;justify-content:space-between;gap:8px;padding:4px 8px;border-radius:6px;background:var(--card);word-break:break-all}
+.ir-row span:last-child{opacity:.75;white-space:nowrap}
+.ir-row.same{background:rgba(220,38,38,.18);border-left:4px solid #dc2626;font-weight:700}
+.ir-row.same span:last-child{opacity:1;color:#dc2626}
 #dk{font-family:ui-monospace,monospace;font-size:13px}
 .b{display:flex;flex-wrap:wrap;gap:6px}
 #dx{margin-left:auto;color:#dc2626}
@@ -64,6 +70,17 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <button class="p">저장</button>
       <button type="button" id="dc">취소</button>
       <button type="button" id="dx">삭제</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="idg">
+  <form id="if">
+    <h3>가져오기</h3>
+    <input id="ip" type="password" placeholder="가져올 파일의 마스터 암호" autocomplete="off">
+    <div id="ir"></div>
+    <div class="b">
+      <button id="ig" class="p">확인</button>
+      <button type="button" id="ic">취소</button>
     </div>
   </form>
 </dialog>
@@ -157,10 +174,12 @@ const dn = $('#dn'), dk = $('#dk'), dm = $('#dm');
 const grow = el => { if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
 const mask = on => TS ? dk.classList.toggle('m', on) : (dk.type = on ? 'password' : 'text');
 // 다른 항목과 이름이나 키가 같으면 이유를 돌려준다 (공백 차이는 무시하고 이름은 대소문자도 무시)
+const match = (n, k, others) => ({
+  byName: n.trim() && others.find(o => o.n.trim().toLowerCase() === n.trim().toLowerCase()),
+  byKey: k.trim() && others.find(o => o.k.trim() === k.trim()),
+});
 const dupOf = () => {
-  const n = dn.value.trim().toLowerCase(), k = dk.value.trim(), o = items.filter((_, i) => i !== ed);
-  const byName = n && o.find(it => it.n.trim().toLowerCase() === n);
-  const byKey = k && o.find(it => it.k.trim() === k);
+  const {byName, byKey} = match(dn.value, dk.value, items.filter((_, i) => i !== ed));
   return [byName && '같은 이름 있음', byKey && `같은 키 있음: ${byKey.n}`].filter(Boolean).join(' · ');
 };
 function info() {
@@ -216,16 +235,62 @@ $('#exp').onclick = () => {
   a.download = 'apikeys-vault.json';
   a.click();
 };
+// 가져오기: 파일 암호로 풀어 이름이나 키가 겹치지 않는 항목만 추가한다 (현재 금고를 덮어쓰지 않는다)
+let imp, impAdd;
+const ip = $('#ip'), ir = $('#ir');
+const sp = (t, c) => Object.assign(document.createElement('span'), {textContent: t, className: c || ''});
 $('#imp').onclick = () => $('#file').click();
 $('#file').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
   try {
-    const v = JSON.parse(await e.target.files[0].text());
-    if (!v.s || !v.i || !v.d) throw 0;
-    if (!confirm('현재 금고를 덮어쓸까요?')) return;
-    localStorage.vault = JSON.stringify(v);
-    location.reload();
-  } catch { toast('잘못된 파일'); }
+    imp = JSON.parse(await f.text());
+    if (!imp.s || !imp.i || !imp.d) throw 0;
+  } catch { return toast('잘못된 파일'); }
+  impAdd = null;
+  ip.hidden = false;
+  ip.value = '';
+  ir.textContent = '';
+  $('#ig').textContent = '확인';
+  $('#ig').disabled = false;
+  $('#idg').showModal();
 };
+$('#if').onsubmit = async e => {
+  e.preventDefault();
+  if (impAdd) { // 2단계: 미리보기에서 추가 대상으로 나온 항목만 합친다
+    items.unshift(...impAdd);
+    $('#idg').close();
+    render();
+    return save();
+  }
+  let list;
+  try {
+    const k2 = await derive(ip.value, unb64(imp.s));
+    list = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(imp.i)}, k2, unb64(imp.d))));
+    if (!Array.isArray(list)) throw 0;
+  } catch { return ir.textContent = '암호 틀림'; }
+  const pool = [...items];
+  let skip = 0;
+  impAdd = [];
+  ir.textContent = '';
+  for (const x of list.filter(x => x && typeof x.n === 'string' && typeof x.k === 'string')) {
+    const it = {n: x.n.trim(), k: x.k, m: String(x.m ?? '')};
+    const {byName, byKey} = match(it.n, it.k, pool);
+    const ok = it.n && !byName && !byKey;
+    if (ok) { pool.push(it); impAdd.push(it); } else skip++;
+    const r = document.createElement('div');
+    r.className = 'ir-row' + (byName ? ' same' : '');
+    r.append(sp(it.n || '(이름 없음)'), sp(ok ? '추가' : !it.n ? '이름 없음' : byName ? '같은 이름 → 건너뜀' : `같은 키: ${byKey.n} → 건너뜀`));
+    ir.append(r);
+  }
+  ir.prepend(sp(`추가 ${impAdd.length}개 · 건너뜀 ${skip}개`, 'sum'));
+  ip.hidden = true;
+  $('#ig').textContent = `추가 ${impAdd.length}개`;
+  $('#ig').disabled = !impAdd.length;
+};
+$('#ic').onclick = () => $('#idg').close();
+// 닫을 때 풀어 둔 내용을 지운다
+$('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent = ''; };
 
 // 5분 무입력 시 자동 잠금
 function idle() { clearTimeout(t2); t2 = setTimeout(() => location.reload(), 300000); }
