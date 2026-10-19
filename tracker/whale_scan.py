@@ -1,7 +1,7 @@
 """세력 흔적 스캐너: 3년치 수급 패널에서 기관+외국인 순매수 급증 양봉을 찾는다.
 
 사용: python3 whale_scan.py [패널폴더] [탐색일수] [최근일수] [상위N]
-      python3 whale_scan.py --live   네이버 거래량 기준 + 종목명 (day.stock 클론 필요)
+      python3 whale_scan.py --live [--cached]   네이버 거래량 기준 + 종목명 (day.stock 클론 필요). --cached 는 저장본만 사용
       python3 whale_scan.py --bt   3년 백테스트 (신호 다음날 시가 수익률). --live 로 받은 거래량이 있으면 거래량 기준
       python3 whale_scan.py --test
 의존: pandas pyarrow
@@ -82,15 +82,38 @@ def backtest(pn):
     print(f"{'전체':<7} n={len(r):>6} 평균 {r.mean()*100:+.2f}% 승률 {(r > 0).mean()*100:.1f}%")
 
 
+def fetch_all(naver, codes, workers=16):
+    """종목별 일봉 병렬 수집. 200종목마다 진행률을 찍는다."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(c):
+        try:
+            return naver.daily(c, DAYS)
+        except Exception as e:  # 한 종목 실패로 전체를 멈추지 않는다
+            print(f"  {c} 실패: {e}", flush=True)
+
+    parts = []
+    with ThreadPoolExecutor(workers) as ex:
+        for i, p in enumerate(ex.map(one, codes), 1):
+            if p is not None and len(p):
+                parts.append(p)
+            if i % 200 == 0 or i == len(codes):
+                print(f"  수집 {i}/{len(codes)}", flush=True)
+    return pd.concat(parts, ignore_index=True)
+
+
 def live(pn, lookback=60, recent=5, top_n=500):
     """네이버 일봉 거래량 기준 신호 + 거래대금 상위 + 수급 확인. 종목명 포함."""
     sys.path.insert(0, DIR.rsplit("/surge_data", 1)[0])
     from surge import naver  # day.stock 저장소 모듈
 
     u = naver.universe().set_index("code")
-    long = naver.all_daily(list(u.index), DAYS)
-    os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-    long.to_parquet(CACHE)  # 3년치 거래량 보관. --bt 가 이걸 읽는다
+    if "--cached" in sys.argv:  # 네트워크 없이 저장된 3년치로 스캔. 마지막 저장일까지만 반영
+        long = pd.read_parquet(CACHE)
+    else:
+        long = fetch_all(naver, list(u.index))
+        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+        long.to_parquet(CACHE)  # 3년치 거래량 보관. --bt 가 이걸 읽는다
     w = naver.wide(long)
     t = tiers(w["volume"], w["open"], w["close"]).tail(lookback)
     pool = (w["close"] * w["volume"]).iloc[-1].nlargest(top_n)
