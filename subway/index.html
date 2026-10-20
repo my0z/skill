@@ -16,7 +16,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--sans);position:relat
 .st text{font-size:calc(11px*var(--u));fill:var(--fg);paint-order:stroke;stroke:var(--bg);stroke-width:calc(3px*var(--u));stroke-linejoin:round;pointer-events:none;display:none}
 svg.l-all .st text,svg.l-tr .st.tr text,.st.sel text{display:block}
 .st.sel circle.n,.st.sel circle.t{stroke:var(--accent);stroke-width:calc(2.6px*var(--u))}
-svg.iso .ln:not(.on){opacity:.1}
+.train{r:calc(3.8px*var(--u));fill:var(--panel);stroke-width:calc(2px*var(--u));pointer-events:none;filter:drop-shadow(0 0 calc(3px*var(--u)) rgb(255 255 255/.7))}
+svg.iso .ln:not(.on),svg.iso .train:not(.on){opacity:.1}
 svg.iso .st.off{opacity:.15}
 .panel{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:16px;width:min(340px,calc(100% - 32px));background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 12px rgb(0 0 0/.12)}
 h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.01em}
@@ -87,10 +88,23 @@ const pts=a=>a.map(n=>P.get(n)).filter(Boolean).map(q=>q.join(",")).join(" ");
 const riverPts=RIVER.split(" ").map(s=>{const[a,o]=s.split(":");return X(+o)+","+Y(+a)}).join(" ");
 let h=`<polyline class="river" points="${riverPts}"/>`;
 LINES.forEach(l=>l.paths.forEach(p=>{h+=`<polyline class="ln" data-l="${l.id}" stroke="${l.c}" points="${pts(p)}"/>`}));
+h+=`<g id="gt"></g>`;
 const col=Object.fromEntries(LINES.map(l=>[l.id,l.c]));
 [...M.keys()].filter(n=>P.has(n)).forEach(n=>{const[x,y]=P.get(n),ls=[...M.get(n)],t=ls.length>1;
  h+=`<g class="st${t?" tr":""}" data-n="${n}" data-ls="${ls.join("")}"><circle class="${t?"t":"n"}" cx="${x}" cy="${y}" ${t?"":`stroke="${col[ls[0]]}"`}/><circle class="h" cx="${x}" cy="${y}"/><text x="${x}" y="${y}" dx="calc(1px)" >${n}</text></g>`});
 svg.innerHTML=h;
+// 열차 점: 각 경로를 왕복하며 움직인다
+const gt=svg.querySelector("#gt"),TR=[],SPEED=150;
+LINES.forEach(l=>l.paths.forEach(p=>{const q=p.map(n=>P.get(n)).filter(Boolean),c=[0];
+ for(let i=1;i<q.length;i++)c.push(c[i-1]+Math.hypot(q[i][0]-q[i-1][0],q[i][1]-q[i-1][1]));
+ const L=c[c.length-1];if(L<50)return;const n=Math.max(1,Math.round(L/450));
+ for(let k=0;k<n;k++){const e=document.createElementNS(NS,"circle");e.setAttribute("class","train");e.setAttribute("stroke",l.c);e.dataset.l=l.id;gt.appendChild(e);TR.push({e,q,c,L,ph:(k+Math.random()*.6)/n*2*L})}}));
+function place(T,d){let s=d%(2*T.L);if(s>T.L)s=2*T.L-s;let i=1;while(i<T.c.length-1&&T.c[i]<s)i++;
+ const f=(s-T.c[i-1])/((T.c[i]-T.c[i-1])||1),a=T.q[i-1],b=T.q[i];
+ T.e.setAttribute("cx",a[0]+(b[0]-a[0])*f);T.e.setAttribute("cy",a[1]+(b[1]-a[1])*f)}
+const still=matchMedia("(prefers-reduced-motion:reduce)").matches;
+function tick(ms){TR.forEach(T=>place(T,T.ph+ms/1000*SPEED));if(!still)requestAnimationFrame(tick)}
+requestAnimationFrame(tick);
 // 라벨 오프셋은 줌에 따라 달라지므로 text 위치를 JS로 갱신한다
 const texts=[...svg.querySelectorAll(".st text")];
 let v={x:0,y:0,w:1200};
@@ -121,7 +135,7 @@ function pick(n){svg.querySelectorAll(".st.sel").forEach(g=>g.classList.remove("
 const lg=document.getElementById("lg");let iso=null;
 LINES.forEach(l=>{const b=document.createElement("button");b.className="chip";b.setAttribute("aria-pressed","false");b.innerHTML=`<i style="background:${l.c}"></i>${l.name}`;
  b.onclick=()=>{iso=iso==l.id?null:l.id;svg.classList.toggle("iso",!!iso);
-  svg.querySelectorAll(".ln").forEach(e=>e.classList.toggle("on",e.dataset.l==iso));
+  svg.querySelectorAll(".ln,.train").forEach(e=>e.classList.toggle("on",e.dataset.l==iso));
   svg.querySelectorAll(".st").forEach(g=>g.classList.toggle("off",!!iso&&!g.dataset.ls.includes(iso)));
   lg.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b&&!!iso)))};lg.appendChild(b)});
 document.getElementById("names").innerHTML=[...M.keys()].sort().map(n=>`<option value="${n}">`).join("");
