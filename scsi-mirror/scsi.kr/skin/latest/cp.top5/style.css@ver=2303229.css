@@ -1,0 +1,23 @@
+.simple-swipe-latest { overflow: hidden; }
+.simple-swipe-latest .swiper-slide { text-align: center; }
+.simple-swipe-latest .swiper-slide:hover {
+  transform: scale(1.02);
+  z-index: 2;
+}
+.simple-swipe-latest .ss-item { display: block; text-decoration: none; color: #333; }
+.simple-swipe-latest .ss-img { 
+								   width: 180px;
+								   height: 100px;
+								   object-fit: cover; 
+								   object-position: center center; /* 중앙을 기준으로 정 in on렬 */
+								   border-top-left-radius: 30px;  border-bottom-left-radius: 15px; border-top-right-radius: 15px;  border-bottom-right-radius: 30px;
+								   border: 2px solid #BBB;
+								   background-color:#fff;
+								   box-shadow: 3px 0 10px 4px #ddd; /* 바깥쪽 border처럼 보이게 */
+							       overflow: hidden;
+								   }
+.simple-swipe-latest .ss-img img { 
+									height:100%;
+									}
+.simple-swipe-latest .ss-title { font-size: 1.2em; margin-top: 4px; white-space: normal; text-overflow: normal;height:42px;overflow:hidden;text-align:left}
+
