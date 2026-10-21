@@ -21,14 +21,28 @@ svg.iso .ln:not(.on),svg.iso .train:not(.on){opacity:.1}
 svg.iso .st.off{opacity:.15}
 .panel{position:absolute;left:max(16px,env(safe-area-inset-left,0px));top:16px;width:min(340px,calc(100% - 32px));background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 12px rgb(0 0 0/.12)}
 h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.01em}
-#q{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--edge);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
-#q:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.panel input{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--edge);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.panel input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .lg{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;border:1px solid var(--edge);background:var(--bg);color:var(--fg);font:inherit;font-size:12px;cursor:pointer}
 .chip i{width:10px;height:10px;border-radius:50%;display:block}
 .chip[aria-pressed="true"]{border-color:var(--fg);font-weight:700}
 #info{font-size:13px;color:var(--muted);min-height:1.4em;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 #info b{color:var(--fg);font-size:14px;margin-right:2px}
+.rt{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;gap:6px}
+.go{flex:1;padding:8px;border:0;border-radius:6px;background:var(--accent);color:var(--bg);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+#res{font-size:13px;display:flex;flex-direction:column;gap:4px;max-height:30vh;overflow:auto}
+#res .tot{font-size:15px;font-weight:700}
+#res .seg{display:flex;gap:6px;align-items:baseline}
+#res .seg i{width:10px;height:10px;border-radius:50%;flex:none}
+#res .m{color:var(--muted)}
+.rg{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.rg.c{stroke:var(--panel);stroke-width:12px}
+.rg.f{stroke-width:7px}
+svg.rte .ln,svg.rte .train{opacity:.15}
+svg.rte .st:not(.in){opacity:.2}
+.st.in text{display:block}
 .zoom{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:16px;display:flex;flex-direction:column;gap:6px}
 .zoom button{width:38px;height:38px;border-radius:8px;border:1px solid var(--edge);background:var(--panel);color:var(--fg);font:inherit;font-size:18px;cursor:pointer}
 .note{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:16px;font-size:11px;color:var(--muted);max-width:60%}
@@ -39,6 +53,13 @@ h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.01em}
   <h1>수도권 지하철 노선도</h1>
   <input id="q" list="names" placeholder="역 검색" autocomplete="off" aria-label="역 검색">
   <datalist id="names"></datalist>
+  <div class="rt">
+    <input id="o" list="names" placeholder="출발역" autocomplete="off" aria-label="출발역">
+    <input id="v" list="names" placeholder="경유역 (선택)" autocomplete="off" aria-label="경유역">
+    <input id="d" list="names" placeholder="도착역" autocomplete="off" aria-label="도착역">
+    <div class="row"><button class="go" id="go">경로 찾기</button><button class="chip" id="rc">지우기</button></div>
+    <div id="res" aria-live="polite"></div>
+  </div>
   <div class="lg" id="lg"></div>
   <div id="info">역을 누르면 환승 노선이 보입니다</div>
 </div>
@@ -88,7 +109,7 @@ const pts=a=>a.map(n=>P.get(n)).filter(Boolean).map(q=>q.join(",")).join(" ");
 const riverPts=RIVER.split(" ").map(s=>{const[a,o]=s.split(":");return X(+o)+","+Y(+a)}).join(" ");
 let h=`<polyline class="river" points="${riverPts}"/>`;
 LINES.forEach(l=>l.paths.forEach(p=>{h+=`<polyline class="ln" data-l="${l.id}" stroke="${l.c}" points="${pts(p)}"/>`}));
-h+=`<g id="gt"></g>`;
+h+=`<g id="rg"></g><g id="gt"></g>`;
 const col=Object.fromEntries(LINES.map(l=>[l.id,l.c]));
 [...M.keys()].filter(n=>P.has(n)).forEach(n=>{const[x,y]=P.get(n),ls=[...M.get(n)],t=ls.length>1;
  h+=`<g class="st${t?" tr":""}" data-n="${n}" data-ls="${ls.join("")}"><circle class="${t?"t":"n"}" cx="${x}" cy="${y}" ${t?"":`stroke="${col[ls[0]]}"`}/><circle class="h" cx="${x}" cy="${y}"/><text x="${x}" y="${y}" dx="calc(1px)" >${n}</text></g>`});
@@ -131,7 +152,9 @@ const info=document.getElementById("info");let sel=null;
 function pick(n){svg.querySelectorAll(".st.sel").forEach(g=>g.classList.remove("sel"));
  const g=svg.querySelector(`.st[data-n="${n}"]`);if(!g)return;g.classList.add("sel");g.parentNode.appendChild(g);sel=n;
  info.innerHTML=`<b></b>`+[...M.get(n)].map(i=>{const l=LINES.find(x=>x.id==i);return `<span class="chip"><i style="background:${l.c}"></i>${l.name}</span>`}).join("");
+ info.insertAdjacentHTML("beforeend",["o:출발","v:경유","d:도착"].map(s=>`<button class="chip" data-f="${s[0]}">${s.slice(2)}</button>`).join(""));
  info.firstChild.textContent=n}
+info.addEventListener("click",e=>{const f=e.target.dataset.f;if(f&&sel)document.getElementById(f).value=sel});
 const lg=document.getElementById("lg");let iso=null;
 LINES.forEach(l=>{const b=document.createElement("button");b.className="chip";b.setAttribute("aria-pressed","false");b.innerHTML=`<i style="background:${l.c}"></i>${l.name}`;
  b.onclick=()=>{iso=iso==l.id?null:l.id;svg.classList.toggle("iso",!!iso);
@@ -143,5 +166,38 @@ const q=document.getElementById("q");q.addEventListener("change",()=>{const n=q.
 document.getElementById("zi").onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,0.6)};
 document.getElementById("zo").onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1.6)};
 document.getElementById("zf").onclick=fit;
+// 경로 탐색: 역간 시간 = 거리/평균속도 + 정차 0.5분 + 환승 4분
+// shortcut: 배차 대기와 급행과 실시간 지연 미반영, 시간표 데이터가 생기면 교체
+const SP={A:65,S:55},KMH=35,DWELL=.5,TF=4,KM=.02775,adj=new Map(),W=new Map();
+const edge=(a,b,t)=>{if(!adj.has(a))adj.set(a,[]);adj.get(a).push(b);W.set(a+">"+b,t)};
+LINES.forEach(l=>l.paths.forEach(p=>{for(let i=1;i<p.length;i++){const a=P.get(p[i-1]),b=P.get(p[i]);if(!a||!b||p[i]==p[i-1])continue;
+ const t=Math.hypot(a[0]-b[0],a[1]-b[1])*KM/(SP[l.id]||KMH)*60+DWELL,x=p[i-1]+"|"+l.id,y=p[i]+"|"+l.id;edge(x,y,t);edge(y,x,t)}}));
+M.forEach((ls,n)=>{if(P.has(n))ls.forEach(a=>ls.forEach(b=>{if(a!=b)edge(n+"|"+a,n+"|"+b,TF)}))});
+function dijk(o,d){const D=new Map(),pv=new Map(),Q=new Set();
+ M.get(o).forEach(l=>{D.set(o+"|"+l,0);Q.add(o+"|"+l)});
+ while(Q.size){let k,m=1e9;Q.forEach(x=>{if(D.get(x)<m){m=D.get(x);k=x}});Q.delete(k);
+  if(k.split("|")[0]==d){const s=[];for(let c=k;c;c=pv.get(c))s.unshift(c);return{s,t:m}}
+  (adj.get(k)||[]).forEach(y=>{const n=m+W.get(k+">"+y);if(n<(D.has(y)?D.get(y):1e9)){D.set(y,n);pv.set(y,k);Q.add(y)}})}
+ return null}
+const $=id=>document.getElementById(id),res=$("res"),rg=svg.querySelector("#rg");
+function clearRoute(){rg.innerHTML="";svg.classList.remove("rte");svg.querySelectorAll(".st.in").forEach(g=>g.classList.remove("in"));res.innerHTML=""}
+function go(){clearRoute();const o=$("o").value.trim(),via=$("v").value.trim(),d=$("d").value.trim(),bad=[o,via,d].find(n=>n&&!P.has(n));
+ if(bad){res.textContent=`'${bad}' 역을 찾을 수 없습니다`;return}
+ if(!o||!d||o==d){res.textContent="출발역과 도착역을 서로 다르게 입력하세요";return}
+ const stops=via?[o,via,d]:[o,d];let S=[],T=0;
+ for(let i=1;i<stops.length;i++){const r=dijk(stops[i-1],stops[i]);if(!r){res.textContent="이어지는 경로가 없습니다";return}
+  if(S.length){const a=S[S.length-1];if(a==r.s[0])r.s.shift();else T+=TF}S=S.concat(r.s);T+=r.t}
+ const segs=[];S.forEach((s,i)=>{const[n,l]=s.split("|"),c=segs[segs.length-1];
+  if(c&&c.l==l)c.st.push(n),c.t+=W.get(S[i-1]+">"+s);else segs.push({l,st:[n],t:0})});
+ const ride=segs.filter(c=>c.st.length>1),nm=Object.fromEntries(LINES.map(l=>[l.id,l.name])),at=new Date(Date.now()+T*6e4);
+ res.innerHTML=`<div class="tot">약 ${Math.round(T)}분 · 환승 ${ride.length-1}회</div><div class="m">지금 출발하면 ${at.getHours()}:${String(at.getMinutes()).padStart(2,"0")} 도착 예상</div>`
+  +ride.map((c,i)=>(i?`<div class="m">환승 ${TF}분</div>`:"")+`<div class="seg"><i style="background:${col[c.l]}"></i><span>${nm[c.l]} ${c.st[0]} → ${c.st[c.st.length-1]} <span class="m">${c.st.length-1}개역 ${Math.round(c.t)}분</span></span></div>`).join("");
+ let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+ ride.forEach(c=>{const q=pts(c.st);rg.insertAdjacentHTML("beforeend",`<polyline class="rg c" points="${q}"/><polyline class="rg f" stroke="${col[c.l]}" points="${q}"/>`)});
+ S.forEach(s=>{const n=s.split("|")[0],[x,y]=P.get(n);x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);svg.querySelector(`.st[data-n="${n}"]`).classList.add("in")});
+ svg.classList.add("rte");const r=svg.getBoundingClientRect();v.w=Math.max(300,(x1-x0)*1.5,(y1-y0)*1.5*r.width/r.height);
+ v.x=(x0+x1)/2-v.w/2;v.y=(y0+y1)/2-r.height*v.w/r.width/2;apply()}
+$("go").onclick=go;$("rc").onclick=()=>{["o","v","d"].forEach(i=>$(i).value="");clearRoute()};
+["o","v","d"].forEach(i=>$(i).addEventListener("keydown",e=>{if(e.key=="Enter")go()}));
 addEventListener("resize",apply);fit();
 </script>
