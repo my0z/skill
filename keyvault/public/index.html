@@ -73,6 +73,7 @@ dialog h3{margin:0}
       <button id="so">정렬: 직접</button>
       <button id="exp">내보내기</button>
       <button id="imp">가져오기</button>
+      <button id="cc">클립보드 비우기</button>
       <button id="tr">휴지통 (0)</button>
       <button id="sg">설정</button>
       <button id="lock">잠금</button>
@@ -350,9 +351,6 @@ function render() {
   });
 }
 
-// KEY 나 SECRET 을 복사하면 30초 뒤 클립보드를 비운다. 창이 포커스를 잃었으면 브라우저가 막을 수 있다
-let tc;
-const scheduleClear = () => { clearTimeout(tc); tc = setTimeout(() => navigator.clipboard.writeText('').catch(() => {}), 30000); };
 $('#list').onclick = async e => {
   const b = e.target.closest('button');
   if (!b) return;
@@ -360,8 +358,7 @@ $('#list').onclick = async e => {
   if (a === 'ed') return openDlg(i);
   try {
     await navigator.clipboard.writeText({cpn: items[i].n, cpk: items[i].k, cps: items[i].sc}[a]);
-    toast({cpn: '이름 복사됨', cpk: 'KEY 복사됨 (30초 뒤 클립보드 비움)', cps: 'SECRET 복사됨 (30초 뒤 클립보드 비움)'}[a]);
-    if (a !== 'cpn') scheduleClear();
+    toast({cpn: '이름', cpk: 'KEY', cps: 'SECRET'}[a] + ' 복사됨');
   } catch { toast('복사 실패'); }
 };
 
@@ -527,6 +524,10 @@ $('#add').onclick = () => openDlg(-1);
 // 임시 붙여넣기 칸은 메모리에만 있다. 저장하지 않으므로 잠그거나 새로고침하면 사라진다
 $('#tc').onclick = async () => {
   try { await navigator.clipboard.writeText($('#tt').value); toast('복사됨'); } catch { toast('복사 실패'); }
+};
+// 복사해 둔 KEY 나 SECRET 을 누를 때 바로 지운다. 창이 포커스를 잃었으면 브라우저가 막을 수 있다
+$('#cc').onclick = async () => {
+  try { await navigator.clipboard.writeText(''); toast('클립보드를 비웠습니다'); } catch { toast('비우기 실패'); }
 };
 $('#tx').onclick = () => { $('#tt').value = ''; $('#tt').focus(); };
 // 새로고침이나 뒤로가기 캐시에서 브라우저가 입력값을 되살리지 못하게 떠날 때 비운다
