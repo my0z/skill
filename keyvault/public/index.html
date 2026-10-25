@@ -80,7 +80,7 @@ dialog h3{margin:0}
     <h3 id="dt"></h3>
     <textarea id="dn" rows="1" placeholder="이름 (필수)" required></textarea>
     <textarea id="dk" class="m" rows="1" placeholder="KEY (필수)" spellcheck="false" required></textarea>
-    <textarea id="ds" class="m" rows="1" placeholder="SECRET (필수)" spellcheck="false" required></textarea>
+    <textarea id="ds" class="m" rows="1" placeholder="SECRET (선택)" spellcheck="false"></textarea>
     <textarea id="dm" rows="2" placeholder="메모"></textarea>
     <div class="b"><button type="button" id="da">파일 추가</button><small class="info">파일당 1MB 전체 2MB까지</small></div>
     <div id="dfl"></div>
@@ -355,9 +355,9 @@ $('#list').addEventListener('pointercancel', dragEnd);
 
 // 키 칸은 textarea에 CSS로 가려 줄바꿈으로 끝까지 보이게 한다. 미지원 브라우저는 password input으로 대체한다
 const TS = CSS.supports('-webkit-text-security', 'disc');
-if (!TS) for (const [id, ph] of [['dk', 'KEY (필수)'], ['ds', 'SECRET (필수)']]) {
+if (!TS) for (const [id, ph, req] of [['dk', 'KEY (필수)', true], ['ds', 'SECRET (선택)', false]]) {
   $('#' + id).replaceWith(Object.assign(document.createElement('input'),
-    {id, type: 'password', autocomplete: 'off', spellcheck: false, placeholder: ph, required: true}));
+    {id, type: 'password', autocomplete: 'off', spellcheck: false, placeholder: ph, required: req}));
 }
 const dn = $('#dn'), dk = $('#dk'), ds = $('#ds'), dm = $('#dm');
 const grow = el => { if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
@@ -455,7 +455,7 @@ $('#f').onsubmit = async e => {
   e.preventDefault();
   if (dupOf().msg) return dk.focus();
   const it = {n: dn.value.trim(), k: dk.value, sc: ds.value, m: dm.value, f: dfs};
-  if (!it.n || !it.k.trim() || !it.sc.trim()) return (it.n ? it.k.trim() ? ds : dk : dn).focus();
+  if (!it.n || !it.k.trim()) return (it.n ? dk : dn).focus();
   if (!it.n) return dn.focus();
   if (ed < 0) items.unshift(it); else items[ed] = it;
   $('#dlg').close();
