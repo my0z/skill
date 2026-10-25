@@ -66,6 +66,7 @@ dialog h3{margin:0}
     <div id="bar">
       <input id="q" placeholder="검색">
       <button id="add" class="p">+ 추가</button>
+      <button id="so">정렬: 직접</button>
       <button id="exp">내보내기</button>
       <button id="imp">가져오기</button>
       <button id="lock">잠금</button>
@@ -285,16 +286,24 @@ $('#gate').onsubmit = async e => {
 };
 
 // 목록에는 이름만 보인다. 이름을 누르면 이름 복사 키는 옆 버튼으로만 복사한다
+// 정렬은 보기만 바꾼다. 저장된 순서(끌어서 정한 순서)는 그대로 두고 직접 순서에서만 끌 수 있다
+const SORTS = ['', 'asc', 'desc'], SORT_LABEL = {'': '직접', asc: '이름↑', desc: '이름↓'};
+let sortMode = SORTS.includes(localStorage.sort) ? localStorage.sort : '';
+const coll = new Intl.Collator('ko', {numeric: true, sensitivity: 'base'});
 function render() {
   const q = $('#q').value.toLowerCase(), list = $('#list');
+  const order = items.map((_, i) => i);
+  if (sortMode) order.sort((a, b) => (sortMode === 'asc' ? 1 : -1) * coll.compare(items[a].n, items[b].n));
+  $('#so').textContent = '정렬: ' + SORT_LABEL[sortMode];
   list.textContent = '';
-  items.forEach((it, i) => {
+  order.forEach(i => {
+    const it = items[i];
     if (q && !(it.n + it.m).toLowerCase().includes(q)) return;
     const r = document.createElement('div');
     r.className = 'row';
     r.dataset.i = i;
-    // 검색 중에는 보이는 항목 사이 순서가 모호해서 끌기 핸들을 숨긴다
-    r.innerHTML = (q ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span>')
+    // 검색이나 정렬 중에는 보이는 순서가 저장된 순서와 달라서 끌기 핸들을 숨긴다
+    r.innerHTML = (q || sortMode ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span>')
       + '<button class="nm" data-a="cpn"></button><button data-a="cpk">KEY복사</button><button data-a="cps">SECRET복사</button><button data-a="ed">수정</button>';
     r.querySelector('.nm').textContent = it.n;
     r.querySelector('.nm').title = it.m;
@@ -482,6 +491,11 @@ $('#tx').onclick = () => { $('#tt').value = ''; $('#tt').focus(); };
 // 새로고침이나 뒤로가기 캐시에서 브라우저가 입력값을 되살리지 못하게 떠날 때 비운다
 addEventListener('pagehide', () => { $('#tt').value = ''; });
 $('#q').oninput = render;
+$('#so').onclick = () => {
+  sortMode = SORTS[(SORTS.indexOf(sortMode) + 1) % SORTS.length];
+  localStorage.sort = sortMode;
+  render();
+};
 $('#lock').onclick = () => lock();
 $('#exp').onclick = () => {
   const a = document.createElement('a');
