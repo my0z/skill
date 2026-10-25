@@ -18,13 +18,15 @@ button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
 #gate{display:flex;flex-direction:column;gap:8px;max-width:320px;margin:20vh auto}
 #bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 #q{flex:1;min-width:120px}
-.row{display:flex;gap:6px;align-items:center;background:var(--card);padding:6px 8px;border-radius:8px;margin-bottom:6px}
+.row{display:grid;gap:4px;background:var(--card);padding:6px 8px;border-radius:8px;margin-bottom:6px}
+.rt{display:flex;gap:6px;align-items:center;min-width:0}
+.rb{display:flex;gap:6px;flex-wrap:wrap}
 .hd{cursor:grab;touch-action:none;user-select:none;padding:8px 6px;opacity:.6}
 .row.drag{opacity:.6;outline:2px solid var(--ac)}
 .row.drop-up{box-shadow:0 -3px 0 var(--ac)}
 .row.drop-dn{box-shadow:0 3px 0 var(--ac)}
 .row.dupe{background:rgba(220,38,38,.18);box-shadow:inset 4px 0 #dc2626;font-weight:700}
-.nm{flex:1;min-width:0;text-align:left;word-break:break-all;background:transparent;border-color:transparent}
+.nm{flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:transparent;border-color:transparent}
 #msg{color:#dc2626;min-height:1.2em}
 #tmp{margin-bottom:16px;display:grid;gap:6px}
 #tt{width:100%;resize:vertical;overflow:auto}
@@ -341,8 +343,8 @@ function render() {
     r.className = 'row';
     r.dataset.i = i;
     // 검색이나 정렬 중에는 보이는 순서가 저장된 순서와 달라서 끌기 핸들을 숨긴다
-    r.innerHTML = (q || sortMode ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span>')
-      + '<button class="nm" data-a="cpn"></button><button data-a="cpk">KEY복사</button><button data-a="cps">SECRET복사</button><button data-a="ed">수정</button>';
+    r.innerHTML = '<div class="rt">' + (q || sortMode ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span>')
+      + '<button class="nm" data-a="cpn"></button></div><div class="rb"><button data-a="cpk">KEY복사</button><button data-a="cps">SECRET복사</button><button data-a="ed">수정</button></div>';
     r.querySelector('.nm').textContent = it.n;
     r.querySelector('.nm').title = it.m;
     r.querySelector('[data-a=cps]').disabled = !it.sc;
