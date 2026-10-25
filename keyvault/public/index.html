@@ -123,17 +123,96 @@ const derive = async (pw, s) => crypto.subtle.deriveKey(
   await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']),
   {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt']);
 
-// 저장 후 저장소에서 다시 읽어 복호화해 원본과 비교한다
-async function save() {
+// ---- 서버 동기화: 서버에는 암호화된 덩어리만 올라가고 접근 토큰은 마스터 암호에서 따로 만든다 ----
+// shortcut: 금고 하나를 통째로 올리고 충돌은 이름 기준 3자 병합으로 푼다. 서버 쪽 시도 횟수 제한은 없어 암호가 약하면 위험하다
+const AUTH_SALT = enc.encode('apikeys-vault-auth-v1');
+let auth, rv = 0, base = [], busy = Promise.resolve();
+async function authTok(pw) {
+  const m = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name: 'PBKDF2', salt: AUTH_SALT, iterations: 310000, hash: 'SHA-256'}, m, 256);
+  return [...new Uint8Array(bits)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+const api = (method, body) => fetch('/api/vault', {method, headers: {authorization: 'Bearer ' + auth, 'content-type': 'application/json'}, body: body && JSON.stringify(body)});
+const openWith = async (b, k) => JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(b.i)}, k, unb64(b.d))));
+async function tryOpen(b, pw) {
+  try { const s = unb64(b.s), k = await derive(pw, s); return {key: k, salt: s, items: await openWith(b, k)}; } catch { return null; }
+}
+// 서버 금고 | 'none' 서버가 비었음 | 'auth' 암호 불일치 | 'off' 연결 안 됨
+async function remote() {
+  try {
+    const r = await api('GET');
+    if (r.status === 404) return 'none';
+    if (r.status === 401) return 'auth';
+    return r.ok ? await r.json() : 'off';
+  } catch { return 'off'; }
+}
+// 이름이 같은 항목끼리 base 와 비교해 바뀐 쪽을 취한다. 양쪽이 다 바뀌면 local 이 이긴다
+function merge3(b, local, rem) {
+  const norm = it => it.n.trim().toLowerCase();
+  const names = [...local, ...rem].map(norm);
+  if (new Set(local.map(norm)).size < local.length || new Set(rem.map(norm)).size < rem.length) {
+    const seen = new Set(), out = [];
+    for (const it of [...local, ...rem]) { const j = JSON.stringify(it); if (!seen.has(j)) { seen.add(j); out.push(it); } }
+    return out;
+  }
+  const idx = a => new Map(a.map(it => [norm(it), JSON.stringify(it)]));
+  const B = idx(b), R = idx(rem), L = idx(local);
+  const pick = n => { const l = L.get(n), r = R.get(n), o = B.get(n); return l === r || r === o ? l : l === o ? r : l; };
+  return [...new Set(names)].map(pick).filter(Boolean).map(s => JSON.parse(s));
+}
+const stat = m => { $('#st').textContent = m; };
+// 저장 후 저장소에서 다시 읽어 복호화해 원본과 비교하고 서버에도 올린다. 겹치는 저장은 순서대로 처리한다
+function save() { const job = busy.then(() => doSave(0)); busy = job.catch(() => {}); return job; }
+async function doSave(tries) {
   const json = JSON.stringify(items);
+  let blob;
   try {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const ct = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, enc.encode(json));
-    localStorage.vault = JSON.stringify({s: b64(salt), i: b64(iv), d: b64(ct)});
+    blob = {s: b64(salt), i: b64(iv), d: b64(ct)};
+    localStorage.vault = JSON.stringify({...blob, rv, dirty: true});
     const v = JSON.parse(localStorage.vault);
     const back = dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d)));
-    $('#st').textContent = back === json ? '저장됨 ✓ ' + new Date().toLocaleTimeString() : '저장 실패!';
-  } catch { $('#st').textContent = '저장 실패!'; }
+    if (back !== json) return stat('저장 실패!');
+  } catch { return stat('저장 실패!'); }
+  if (!auth) return stat('저장됨 ✓ ' + new Date().toLocaleTimeString());
+  try {
+    const r = await api('PUT', {base: rv, blob});
+    if (r.status === 401) return stat('저장됨 (서버 암호가 다름)');
+    if (r.status === 409 && tries < 3) { // 다른 기기에서 먼저 바뀜: 합쳐서 다시 올린다
+      const R = await r.json();
+      if (R.blob.s !== blob.s) return stat('저장됨 (서버와 금고가 달라 다시 로그인 필요)');
+      const rem = await openWith(R.blob, key);
+      items = merge3(base, items, rem);
+      rv = R.v;
+      base = rem;
+      render();
+      return doSave(tries + 1);
+    }
+    if (!r.ok) throw 0;
+    rv = (await r.json()).v;
+    base = JSON.parse(json);
+    localStorage.vault = JSON.stringify({...blob, rv, dirty: false});
+    stat('저장됨 ✓ 동기화 ' + new Date().toLocaleTimeString());
+  } catch { stat('저장됨 (서버 동기화 안 됨)'); }
+}
+// 다른 기기에서 바뀐 내용을 가져온다. 이 기기에서 아직 올리지 못한 변경이 있으면 합쳐서 올린다
+async function pull() {
+  if (!auth || !key || locking || $('#dlg').open || $('#idg').open) return;
+  let R;
+  try { const r = await api('GET'); if (!r.ok) return; R = await r.json(); } catch { return; }
+  const mine = JSON.stringify(items) !== JSON.stringify(base);
+  if (R.v === rv) return mine ? save() : undefined;
+  if (R.blob.s !== b64(salt)) return lock();
+  let rem;
+  try { rem = await openWith(R.blob, key); } catch { return; }
+  items = merge3(base, items, rem);
+  rv = R.v;
+  base = rem;
+  render();
+  if (mine) return save();
+  localStorage.vault = JSON.stringify({...R.blob, rv, dirty: false});
+  stat('다른 기기의 변경을 받음 ' + new Date().toLocaleTimeString());
 }
 // 로그인은 2시간 유지된다. 꺼낼 수 없는(non-extractable) 키 객체만 IndexedDB에 두고 암호는 저장하지 않는다
 const idb = () => new Promise((res, rej) => {
@@ -163,22 +242,34 @@ $('#gate').onsubmit = async e => {
   e.preventDefault();
   const pw = $('#pw').value, v = v0();
   $('#msg').textContent = '';
-  if (!v) {
+  auth = await authTok(pw);
+  const R = await remote();
+  if (R === 'auth') return $('#msg').textContent = '암호 틀림';
+  const onServer = R && R.blob;
+  const srv = onServer ? await tryOpen(R.blob, pw) : null;
+  if (onServer && !srv) return $('#msg').textContent = '암호 틀림';
+  const loc = v ? await tryOpen(v, pw) : null;
+  if (v && !loc && !srv) return $('#msg').textContent = '암호 틀림';
+  let st = srv || loc, push = false;
+  if (!st) { // 서버에도 이 기기에도 금고가 없다: 새로 만든다
     if (pw.length < 8) return $('#msg').textContent = '8자 이상 필요';
-    salt = crypto.getRandomValues(new Uint8Array(16));
-    key = await derive(pw, salt);
-    items = [];
-    await save();
-  } else {
-    salt = unb64(v.s);
-    key = await derive(pw, salt);
-    try {
-      items = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d))));
-    } catch { key = null; return $('#msg').textContent = '암호 틀림'; }
+    const s = crypto.getRandomValues(new Uint8Array(16));
+    st = {key: await derive(pw, s), salt: s, items: []};
+    push = true;
   }
+  rv = onServer ? R.v : 0;
+  base = srv ? structuredClone(srv.items) : [];
+  if (srv && loc && v.dirty) { // 이 기기에서 올리지 못한 변경을 서버 것과 합친다
+    st = {...srv, items: merge3(v.rv === R.v ? srv.items : [], loc.items, srv.items)};
+    push = true;
+  }
+  if (!srv && loc && R === 'none') push = true; // 서버가 비었으면 이 기기의 금고를 올려 주인이 된다
+  ({key, salt, items} = st);
+  if (srv && !push) localStorage.vault = JSON.stringify({...R.blob, rv, dirty: false});
+  if (push) await save();
   $('#pw').value = '';
   exp = Date.now() + 2 * 3600e3;
-  sess = {key, salt: b64(salt), exp, act: Date.now()};
+  sess = {key, salt: b64(salt), exp, act: Date.now(), auth};
   await sset(sess);
   enter();
 };
@@ -380,7 +471,8 @@ $('#q').oninput = render;
 $('#lock').onclick = () => lock();
 $('#exp').onclick = () => {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([localStorage.vault], {type: 'application/json'}));
+  const {s, i, d} = v0();
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({s, i, d})], {type: 'application/json'}));
   a.download = 'apikeys-vault.json';
   a.click();
 };
@@ -490,19 +582,27 @@ function touch() {
 }
 ['input', 'click', 'keydown'].forEach(ev => addEventListener(ev, touch));
 // 절전 등으로 타이머가 밀렸을 수 있어 탭이 다시 보일 때도 확인한다
-addEventListener('visibilitychange', () => { if (key && (Date.now() > exp || Date.now() - sess.act > IDLE)) lock(); });
+addEventListener('visibilitychange', () => {
+  if (key && (Date.now() > exp || Date.now() - sess.act > IDLE)) lock();
+  else if (!document.hidden) pull();
+});
+setInterval(() => { if (!document.hidden) pull(); }, 60000);
 
 // 페이지를 열 때 아직 만료 전이고 금고가 그대로면 암호 없이 복원한다
 (async () => {
   try {
     const s = await sget(), v = v0();
-    if (!s || !v || s.exp < Date.now() || Date.now() - s.act > IDLE || s.salt !== v.s) return sset(null);
+    if (!s || !v || !s.auth || s.exp < Date.now() || Date.now() - s.act > IDLE || s.salt !== v.s) return sset(null);
     sess = s;
+    auth = s.auth;
+    rv = v.rv || 0;
     key = s.key;
     salt = unb64(v.s);
     exp = s.exp;
     items = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d))));
+    base = v.dirty ? [] : structuredClone(items);
     enter();
+    pull();
   } catch { key = null; sset(null); }
 })();
 </script>

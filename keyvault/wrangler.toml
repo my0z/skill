@@ -1,4 +1,5 @@
 name = "keyvault"
+main = "src/index.js"
 compatibility_date = "2026-10-01"
 routes = [
   { pattern = "key.usb.kr", custom_domain = true },
@@ -7,3 +8,9 @@ routes = [
 
 [assets]
 directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[r2_buckets]]
+binding = "VAULT"
+bucket_name = "apikeys-vault"
