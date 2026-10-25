@@ -235,14 +235,16 @@ async function doSave(tries, extra = {}) {
     stat('저장됨 ✓ 동기화 ' + new Date().toLocaleTimeString());
   } catch { stat('저장됨 (서버 동기화 안 됨)'); }
 }
+// 다른 기기에서 암호가 바뀐 것을 알았다: 로컬 사본은 지우지 않고 '밀려난 사본' 표시만 한다. 표시된 사본은 옛 암호로 이 기기에서만 열 수 없다
+function stale() { const v = v0(); if (v) localStorage.vault = JSON.stringify({...v, superseded: true}); return lock(); }
 // 다른 기기에서 바뀐 내용을 가져온다. 이 기기에서 아직 올리지 못한 변경이 있으면 합쳐서 올린다
 async function pull() {
   if (!auth || !key || locking || document.querySelector('dialog[open]')) return;
   let R;
-  try { const r = await api('GET'); if (r.status === 401) return lock(); if (!r.ok) return; R = await r.json(); } catch { return; }
+  try { const r = await api('GET'); if (r.status === 401) return stale(); if (!r.ok) return; R = await r.json(); } catch { return; }
   const mine = JSON.stringify(items) !== JSON.stringify(base);
   if (R.v === rv) return mine ? save() : undefined;
-  if (R.blob.s !== b64(salt)) return lock(); // 다른 기기에서 암호가 바뀜: 로컬 사본은 지우지 않고 잠그기만 한다
+  if (R.blob.s !== b64(salt)) return stale();
   let rem;
   try { rem = await openWith(R.blob, key); } catch { return; }
   items = merge3(base, items, rem);
@@ -284,7 +286,7 @@ $('#gate').onsubmit = async e => {
   auth = await authTok(pw);
   let R = await remote(), mism = false;
   if (R === 'auth') { // 서버 금고가 다른 암호로 잠겨 있다: 이 기기의 금고가 열리면 이 기기에서만 쓴다
-    if (!v || !(await tryOpen(v, pw))) return $('#msg').textContent = '암호 틀림';
+    if (!v || v.superseded || !(await tryOpen(v, pw))) return $('#msg').textContent = '암호 틀림';
     R = 'off';
     auth = null;
     mism = true;
