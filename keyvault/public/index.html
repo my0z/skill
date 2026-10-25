@@ -42,7 +42,7 @@ dialog h3{margin:0}
 .ir-row span:last-child{opacity:.75;white-space:nowrap}
 .ir-row.same{background:rgba(220,38,38,.18);border-left:4px solid #dc2626;font-weight:700}
 .ir-row.same span:last-child{opacity:1;color:#dc2626}
-#dk{font-family:ui-monospace,monospace;font-size:13px}
+#dk,#ds{font-family:ui-monospace,monospace;font-size:13px}
 .b{display:flex;flex-wrap:wrap;gap:6px}
 #dx{margin-left:auto;color:#dc2626}
 .b .info{align-self:center}
@@ -78,8 +78,9 @@ dialog h3{margin:0}
 <dialog id="dlg">
   <form id="f">
     <h3 id="dt"></h3>
-    <textarea id="dn" rows="1" placeholder="이름" required></textarea>
-    <textarea id="dk" class="m" rows="1" placeholder="키" spellcheck="false"></textarea>
+    <textarea id="dn" rows="1" placeholder="이름 (필수)" required></textarea>
+    <textarea id="dk" class="m" rows="1" placeholder="KEY (필수)" spellcheck="false" required></textarea>
+    <textarea id="ds" class="m" rows="1" placeholder="SECRET (필수)" spellcheck="false" required></textarea>
     <textarea id="dm" rows="2" placeholder="메모"></textarea>
     <div class="b"><button type="button" id="da">파일 추가</button><small class="info">파일당 1MB 전체 2MB까지</small></div>
     <div id="dfl"></div>
@@ -295,9 +296,10 @@ function render() {
     r.dataset.i = i;
     // 검색 중에는 보이는 항목 사이 순서가 모호해서 끌기 핸들을 숨긴다
     r.innerHTML = (q ? '' : '<span class="hd" title="끌어서 이동" aria-label="끌어서 이동">☰</span>')
-      + '<button class="nm" data-a="cpn"></button><button data-a="cpk">키복사</button><button data-a="ed">수정</button>';
+      + '<button class="nm" data-a="cpn"></button><button data-a="cpk">KEY복사</button><button data-a="cps">SECRET복사</button><button data-a="ed">수정</button>';
     r.querySelector('.nm').textContent = it.n;
     r.querySelector('.nm').title = it.m;
+    r.querySelector('[data-a=cps]').disabled = !it.sc;
     if (it.f?.length) r.querySelector('.nm').after(sp(`📎 ${it.f.length}`, 'fc'));
     list.append(r);
   });
@@ -309,8 +311,8 @@ $('#list').onclick = async e => {
   const i = +b.closest('.row').dataset.i, a = b.dataset.a;
   if (a === 'ed') return openDlg(i);
   try {
-    await navigator.clipboard.writeText(a === 'cpn' ? items[i].n : items[i].k);
-    toast(a === 'cpn' ? '이름 복사됨' : '키 복사됨');
+    await navigator.clipboard.writeText({cpn: items[i].n, cpk: items[i].k, cps: items[i].sc}[a]);
+    toast({cpn: '이름', cpk: 'KEY', cps: 'SECRET'}[a] + ' 복사됨');
   } catch { toast('복사 실패'); }
 };
 
@@ -353,11 +355,13 @@ $('#list').addEventListener('pointercancel', dragEnd);
 
 // 키 칸은 textarea에 CSS로 가려 줄바꿈으로 끝까지 보이게 한다. 미지원 브라우저는 password input으로 대체한다
 const TS = CSS.supports('-webkit-text-security', 'disc');
-if (!TS) $('#dk').replaceWith(Object.assign(document.createElement('input'),
-  {id: 'dk', type: 'password', autocomplete: 'off', spellcheck: false, placeholder: '키'}));
-const dn = $('#dn'), dk = $('#dk'), dm = $('#dm');
+if (!TS) for (const [id, ph] of [['dk', 'KEY (필수)'], ['ds', 'SECRET (필수)']]) {
+  $('#' + id).replaceWith(Object.assign(document.createElement('input'),
+    {id, type: 'password', autocomplete: 'off', spellcheck: false, placeholder: ph, required: true}));
+}
+const dn = $('#dn'), dk = $('#dk'), ds = $('#ds'), dm = $('#dm');
 const grow = el => { if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 2 + 'px'; } };
-const mask = on => TS ? dk.classList.toggle('m', on) : (dk.type = on ? 'password' : 'text');
+const mask = (el, on) => TS ? el.classList.toggle('m', on) : (el.type = on ? 'password' : 'text');
 // 다른 항목과 이름이나 키가 같으면 이유를 돌려준다 (공백 차이는 무시하고 이름은 대소문자도 무시)
 const match = (n, k, others) => ({
   byName: n.trim() && others.find(o => o.n.trim().toLowerCase() === n.trim().toLowerCase()),
@@ -373,9 +377,9 @@ const flag = set => {
   $('#list .dupe')?.scrollIntoView({block: 'center'});
 };
 function info() {
-  const k = dk.value, ws = /\s/.test(k), d = dupOf(), s = $('#di');
+  const k = dk.value, ws = /\s/.test(k + ds.value), d = dupOf(), s = $('#di');
   s.className = 'info' + (ws || d.msg ? ' w' : '');
-  s.textContent = (k ? `${k.length}자 · 끝 ${k.slice(-4)}` : '키 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d.msg ? ` · ⛔ ${d.msg}` : '');
+  s.textContent = (k ? `KEY ${k.length}자 · 끝 ${k.slice(-4)}` : 'KEY 비어 있음') + (ds.value ? ` · SECRET ${ds.value.length}자` : ' · SECRET 비어 있음') + (ws ? ' · ⚠ 공백 포함' : '') + (d.msg ? ` · ⛔ ${d.msg}` : '');
   $('#f .p').disabled = !!d.msg;
   flag(new Set(d.byName ? [d.byName] : []));
 }
@@ -431,26 +435,27 @@ $('#df').onchange = async e => {
 function openDlg(i) {
   ed = i;
   const it = i < 0 ? {n: '', k: '', m: ''} : items[i];
-  dn.value = it.n; dk.value = it.k; dm.value = it.m;
+  dn.value = it.n; dk.value = it.k; ds.value = it.sc ?? ''; dm.value = it.m;
   dfs = cleanF(it.f);
   $('#dfe').textContent = '';
   renderFiles();
   $('#dt').textContent = i < 0 ? '키 추가' : '키 수정';
   $('#dx').hidden = i < 0;
-  mask(true);
+  mask(dk, true);
+  mask(ds, true);
   $('#dlg').showModal();
-  [dn, dk, dm].forEach(grow);
+  [dn, dk, ds, dm].forEach(grow);
   info();
 }
 // 키 칸은 입력 중에만 평문으로 보여 오타를 바로 확인한다
-dk.onfocus = () => mask(false);
-dk.onblur = () => mask(true);
+for (const el of [dk, ds]) { el.onfocus = () => mask(el, false); el.onblur = () => mask(el, true); }
 $('#f').oninput = e => { if (e.target.tagName === 'TEXTAREA') grow(e.target); info(); };
 $('#f').onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA' && e.target !== dm) { e.preventDefault(); $('#f').requestSubmit(); } };
 $('#f').onsubmit = async e => {
   e.preventDefault();
   if (dupOf().msg) return dk.focus();
-  const it = {n: dn.value.trim(), k: dk.value, m: dm.value, f: dfs};
+  const it = {n: dn.value.trim(), k: dk.value, sc: ds.value, m: dm.value, f: dfs};
+  if (!it.n || !it.k.trim() || !it.sc.trim()) return (it.n ? it.k.trim() ? ds : dk : dn).focus();
   if (!it.n) return dn.focus();
   if (ed < 0) items.unshift(it); else items[ed] = it;
   $('#dlg').close();
@@ -466,8 +471,8 @@ $('#dx').onclick = async () => {
   await save();
 };
 // 닫을 때 입력값을 지워 키가 화면 밖 DOM에 남지 않게 한다
-$('#dlg').onclose = () => { dn.value = dk.value = dm.value = ''; dfs = []; renderFiles(); flag(new Set()); };
-addEventListener('resize', () => [dn, dk, dm].forEach(grow));
+$('#dlg').onclose = () => { dn.value = dk.value = ds.value = dm.value = ''; dfs = []; renderFiles(); flag(new Set()); };
+addEventListener('resize', () => [dn, dk, ds, dm].forEach(grow));
 
 $('#add').onclick = () => openDlg(-1);
 // 임시 붙여넣기 칸은 메모리에만 있다. 저장하지 않으므로 잠그거나 새로고침하면 사라진다
@@ -525,7 +530,7 @@ $('#if').onsubmit = async e => {
   impAdd = [];
   ir.textContent = '';
   for (const x of list.filter(x => x && typeof x.n === 'string' && typeof x.k === 'string')) {
-    const it = {n: x.n.trim(), k: x.k, m: String(x.m ?? ''), f: cleanF(x.f)};
+    const it = {n: x.n.trim(), k: x.k, sc: String(x.sc ?? ''), m: String(x.m ?? ''), f: cleanF(x.f)};
     const {byName, byKey} = match(it.n, it.k, pool);
     if (byName) hit.add(byName);
     const ok = it.n && !byName && !byKey;
