@@ -132,7 +132,8 @@ async function authTok(pw) {
   const bits = await crypto.subtle.deriveBits({name: 'PBKDF2', salt: AUTH_SALT, iterations: 310000, hash: 'SHA-256'}, m, 256);
   return [...new Uint8Array(bits)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
-const api = (method, body) => fetch('/api/vault', {method, headers: {authorization: 'Bearer ' + auth, 'content-type': 'application/json'}, body: body && JSON.stringify(body)});
+let setup = ''; // 서버 금고를 처음 만들 때만 쓰는 설정 키
+const api = (method, body) => fetch('/api/vault', {method, headers: {authorization: 'Bearer ' + auth, 'content-type': 'application/json', ...(setup && {'x-setup': setup})}, body: body && JSON.stringify(body)});
 const openWith = async (b, k) => JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(b.i)}, k, unb64(b.d))));
 async function tryOpen(b, pw) {
   try { const s = unb64(b.s), k = await derive(pw, s); return {key: k, salt: s, items: await openWith(b, k)}; } catch { return null; }
@@ -179,6 +180,7 @@ async function doSave(tries) {
   try {
     const r = await api('PUT', {base: rv, blob});
     if (r.status === 401) return stat('저장됨 (서버 암호가 다름)');
+    if (r.status === 403) return stat('저장됨 (서버 설정 키가 달라 이 기기에만 저장)');
     if (r.status === 409 && tries < 3) { // 다른 기기에서 먼저 바뀜: 합쳐서 다시 올린다
       const R = await r.json();
       if (R.blob.s !== blob.s) return stat('저장됨 (서버와 금고가 달라 다시 로그인 필요)');
@@ -191,6 +193,7 @@ async function doSave(tries) {
     }
     if (!r.ok) throw 0;
     rv = (await r.json()).v;
+    setup = '';
     base = JSON.parse(json);
     localStorage.vault = JSON.stringify({...blob, rv, dirty: false});
     stat('저장됨 ✓ 동기화 ' + new Date().toLocaleTimeString());
@@ -243,8 +246,13 @@ $('#gate').onsubmit = async e => {
   const pw = $('#pw').value, v = v0();
   $('#msg').textContent = '';
   auth = await authTok(pw);
-  const R = await remote();
-  if (R === 'auth') return $('#msg').textContent = '암호 틀림';
+  let R = await remote(), mism = false;
+  if (R === 'auth') { // 서버 금고가 다른 암호로 잠겨 있다: 이 기기의 금고가 열리면 이 기기에서만 쓴다
+    if (!v || !(await tryOpen(v, pw))) return $('#msg').textContent = '암호 틀림';
+    R = 'off';
+    auth = null;
+    mism = true;
+  }
   const onServer = R && R.blob;
   const srv = onServer ? await tryOpen(R.blob, pw) : null;
   if (onServer && !srv) return $('#msg').textContent = '암호 틀림';
@@ -266,12 +274,14 @@ $('#gate').onsubmit = async e => {
   if (!srv && loc && R === 'none') push = true; // 서버가 비었으면 이 기기의 금고를 올려 주인이 된다
   ({key, salt, items} = st);
   if (srv && !push) localStorage.vault = JSON.stringify({...R.blob, rv, dirty: false});
+  if (push && R === 'none') setup = prompt('서버 금고를 처음 만들려면 설정 키를 입력하세요. 취소하면 이 기기에만 저장합니다') || '';
   if (push) await save();
   $('#pw').value = '';
   exp = Date.now() + 2 * 3600e3;
   sess = {key, salt: b64(salt), exp, act: Date.now(), auth};
   await sset(sess);
   enter();
+  if (mism) stat('서버 금고와 암호가 달라 이 기기에서만 사용 중');
 };
 
 // 목록에는 이름만 보인다. 이름을 누르면 이름 복사 키는 옆 버튼으로만 복사한다
