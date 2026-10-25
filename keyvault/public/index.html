@@ -551,9 +551,12 @@ $('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent =
 
 // 로그인은 이 창(탭)을 닫기 전까지 유지된다. 잠금을 누르면 저장된 세션 키를 지우고 다시 잠근다
 let locking;
+const bc = 'BroadcastChannel' in self ? new BroadcastChannel('vault') : null;
+if (bc) bc.onmessage = () => lock(); // 한 탭에서 잠그면 열려 있는 다른 탭도 같이 잠근다
 async function lock() {
   if (locking) return;
   locking = true;
+  bc?.postMessage('lock');
   key = null;
   $('#tt').value = '';
   sessionStorage.removeItem('sid');
