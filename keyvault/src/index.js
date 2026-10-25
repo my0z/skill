@@ -5,6 +5,7 @@ const okBlob = b => b && ['s', 'i', 'd'].every(k => typeof b[k] === 'string');
 const TOK = /^[0-9a-f]{64}$/;
 // 이전 버전: 마지막 보관 후 5분이 지났거나 요청이 강제하면 덮어쓰기 직전 상태를 남기고 최근 50개만 둔다
 const KEEP = 50, GAP = 5 * 60e3;
+// 강제 보관 요청도 이 간격 안에서는 한 번만 받는다 (토큰만 가진 쪽이 이력을 밀어내는 것을 늦춘다)
 const hkey = (v, t) => `history/${String(v).padStart(8, '0')}-${t}.json`;
 const parse = k => { const m = /^history\/(\d+)-(\d+)\.json$/.exec(k); return m && {v: +m[1], t: +m[2], key: k}; };
 async function hist(env) {
@@ -64,7 +65,7 @@ export default {
         if (list.length) await env.VAULT.delete(list.map(x => x.key));
       } else {
         const last = list.at(-1);
-        if (b.snap === true || !last || Date.now() - last.t > GAP) {
+        if (!last || Date.now() - last.t > GAP || b.snap === true && Date.now() - last.t >= Number(env.SNAP_MIN ?? 30e3)) {
           const t = Date.now();
           await env.VAULT.put(hkey(cur.v, t), JSON.stringify({v: cur.v, t, blob: cur.blob}));
           list = await hist(env);

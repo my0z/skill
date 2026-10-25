@@ -235,16 +235,14 @@ async function doSave(tries, extra = {}) {
     stat('저장됨 ✓ 동기화 ' + new Date().toLocaleTimeString());
   } catch { stat('저장됨 (서버 동기화 안 됨)'); }
 }
-// 다른 기기에서 암호가 바뀐 것을 알았다: 올리지 못한 변경이 없으면 옛 암호로 열리는 로컬 사본을 지우고 다시 로그인하게 한다
-function stale() { if (!v0()?.dirty) localStorage.removeItem('vault'); return lock(); }
 // 다른 기기에서 바뀐 내용을 가져온다. 이 기기에서 아직 올리지 못한 변경이 있으면 합쳐서 올린다
 async function pull() {
   if (!auth || !key || locking || document.querySelector('dialog[open]')) return;
   let R;
-  try { const r = await api('GET'); if (r.status === 401) return stale(); if (!r.ok) return; R = await r.json(); } catch { return; }
+  try { const r = await api('GET'); if (r.status === 401) return lock(); if (!r.ok) return; R = await r.json(); } catch { return; }
   const mine = JSON.stringify(items) !== JSON.stringify(base);
   if (R.v === rv) return mine ? save() : undefined;
-  if (R.blob.s !== b64(salt)) return stale();
+  if (R.blob.s !== b64(salt)) return lock(); // 다른 기기에서 암호가 바뀜: 로컬 사본은 지우지 않고 잠그기만 한다
   let rem;
   try { rem = await openWith(R.blob, key); } catch { return; }
   items = merge3(base, items, rem);
