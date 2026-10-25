@@ -117,7 +117,7 @@ const b64 = b => {
   return btoa(s);
 };
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
-let key, salt, items = [], ed = -1, t2, exp;
+let key, salt, items = [], ed = -1;
 
 const derive = async (pw, s) => crypto.subtle.deriveKey(
   {name: 'PBKDF2', salt: s, iterations: 310000, hash: 'SHA-256'},
@@ -218,7 +218,7 @@ async function pull() {
   localStorage.vault = JSON.stringify({...R.blob, rv, dirty: false});
   stat('다른 기기의 변경을 받음 ' + new Date().toLocaleTimeString());
 }
-// 로그인은 2시간 유지된다. 꺼낼 수 없는(non-extractable) 키 객체만 IndexedDB에 두고 암호는 저장하지 않는다
+// 로그인 유지용: 꺼낼 수 없는(non-extractable) 키 객체만 IndexedDB에 두고 암호는 저장하지 않는다
 const idb = () => new Promise((res, rej) => {
   const r = indexedDB.open('vault', 1);
   r.onupgradeneeded = () => r.result.createObjectStore('s');
@@ -278,9 +278,8 @@ $('#gate').onsubmit = async e => {
   if (push && R === 'none') setup = prompt('서버 금고를 처음 만들려면 설정 키를 입력하세요. 취소하면 이 기기에만 저장합니다') || '';
   if (push) await save();
   $('#pw').value = '';
-  exp = Date.now() + 2 * 3600e3;
-  sess = {key, salt: b64(salt), exp, act: Date.now(), auth};
-  await sset(sess);
+  sessionStorage.sid = crypto.randomUUID();
+  await sset({key, salt: b64(salt), auth, sid: sessionStorage.sid});
   enter();
   if (mism) stat('서버 금고와 암호가 달라 이 기기에서만 사용 중');
 };
@@ -550,70 +549,36 @@ $('#ic').onclick = () => $('#idg').close();
 // 닫을 때 풀어 둔 내용을 지운다
 $('#idg').onclose = () => { imp = impAdd = null; ip.value = ''; ir.textContent = ''; flag(new Set()); };
 
-// 만료되거나 잠금을 누르면 저장된 세션 키를 지우고 다시 잠근다
+// 로그인은 이 창(탭)을 닫기 전까지 유지된다. 잠금을 누르면 저장된 세션 키를 지우고 다시 잠근다
 let locking;
 async function lock() {
   if (locking) return;
   locking = true;
-  key = sess = null;
+  key = null;
   $('#tt').value = '';
-  clearTimeout(t2);
-  clearTimeout(t3);
+  sessionStorage.removeItem('sid');
   await sset(null);
   location.reload();
 }
-// 세션 기록이 아직 있을 때만 갱신한다. 다른 탭에서 잠갔다면 false를 돌려줘 이 탭도 잠그게 한다
-const supd = async v => {
-  try {
-    const db = await idb();
-    let ok = false;
-    await new Promise(res => {
-      const t = db.transaction('s', 'readwrite'), st = t.objectStore('s');
-      st.get('k').onsuccess = e => { if (e.target.result) { ok = true; st.put(v, 'k'); } };
-      t.oncomplete = res;
-      t.onerror = res;
-    });
-    return ok;
-  } catch { return true; }
-};
 function enter() {
   $('#gate').hidden = true;
   $('#app').hidden = false;
   render();
-  clearTimeout(t2);
-  t2 = setTimeout(lock, Math.max(0, exp - Date.now()));
-  touch();
 }
-// 무입력 30분이면 2시간 안이어도 잠근다. 마지막 활동 시각을 세션에 적어 두어 탭을 닫았다 열어도 적용된다
-const IDLE = 30 * 60e3;
-let sess, t3, lastW = 0;
-function touch() {
-  if (!key || locking) return;
-  const n = Date.now();
-  sess.act = n;
-  clearTimeout(t3);
-  t3 = setTimeout(lock, IDLE);
-  if (n - lastW > 30e3) { lastW = n; supd(sess).then(ok => { if (!ok) lock(); }); }
-}
-['input', 'click', 'keydown'].forEach(ev => addEventListener(ev, touch));
-// 절전 등으로 타이머가 밀렸을 수 있어 탭이 다시 보일 때도 확인한다
-addEventListener('visibilitychange', () => {
-  if (key && (Date.now() > exp || Date.now() - sess.act > IDLE)) lock();
-  else if (!document.hidden) pull();
-});
+addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
 setInterval(() => { if (!document.hidden) pull(); }, 60000);
 
-// 페이지를 열 때 아직 만료 전이고 금고가 그대로면 암호 없이 복원한다
+// 새로고침해도 같은 창이면 암호 없이 복원한다. 창을 닫으면 sessionStorage 의 표식이 사라져 저장된 키를 쓸 수 없다
 (async () => {
   try {
     const s = await sget(), v = v0();
-    if (!s || !v || !s.auth || s.exp < Date.now() || Date.now() - s.act > IDLE || s.salt !== v.s) return sset(null);
-    sess = s;
+    if (!s) return;
+    if (!v || !s.auth || s.salt !== v.s) return sset(null);
+    if (!s.sid || s.sid !== sessionStorage.sid) return; // 다른 창의 기록이다. 지우지 않고 그 창에 남겨 둔다
     auth = s.auth;
     rv = v.rv || 0;
     key = s.key;
     salt = unb64(v.s);
-    exp = s.exp;
     items = JSON.parse(dec.decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: unb64(v.i)}, key, unb64(v.d))));
     base = v.dirty ? [] : structuredClone(items);
     enter();
